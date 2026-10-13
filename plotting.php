@@ -89,7 +89,7 @@ try {
         $conn->beginTransaction();
         try {
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
-            $deleteStmt = $conn->prepare("DELETE FROM plotting WHERE student_id = ? AND offering_id IN ($placeholders)");
+            $deleteStmt = $conn->prepare("DELETE FROM plotting WHERE TRIM(student_id) = TRIM(?) AND offering_id IN ($placeholders)");
             $deleteStmt->execute(array_merge([$studentId], array_values($offeringIds)));
 
             $valueSql = implode(',', array_fill(0, count($offeringIds), '(?, ?, \'Enrolled\')'));
@@ -122,7 +122,18 @@ try {
         $conn->beginTransaction();
         try {
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
-            $stmt = $conn->prepare("DELETE FROM plotting WHERE student_id = ? AND offering_id IN ($placeholders)");
+
+            // Delete all offerings that share the same section_id and subject_id as the target offeringIds
+            $stmt = $conn->prepare("
+                DELETE FROM plotting
+                WHERE TRIM(student_id) = TRIM(?)
+                  AND offering_id IN (
+                      SELECT o2.offering_id
+                      FROM offering o1
+                      JOIN offering o2 ON o2.section_id = o1.section_id AND o2.subject_id = o1.subject_id
+                      WHERE o1.offering_id IN ($placeholders)
+                  )
+            ");
             $stmt->execute(array_merge([$studentId], array_values($offeringIds)));
 
             $submissionStmt = $conn->prepare('INSERT INTO schedule_submission (student_id, is_submitted, submitted_at) VALUES (:studentId, FALSE, NULL) ON CONFLICT (student_id) DO UPDATE SET is_submitted = FALSE, submitted_at = NULL');
