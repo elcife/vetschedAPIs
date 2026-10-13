@@ -45,7 +45,6 @@ try {
                            o.class_type AS type,
                            o.offering_id
                     FROM plotting p
-                    JOIN schedule_submission ss ON TRIM(ss.student_id) = TRIM(p.student_id) AND ss.is_submitted = TRUE
                     JOIN offering o ON o.offering_id = p.offering_id
                     JOIN subject sub ON sub.subject_id = o.subject_id
                     LEFT JOIN schedule sc ON sc.schedule_id = o.schedule_id
@@ -101,6 +100,7 @@ try {
             }
             $insertStmt = $conn->prepare("INSERT INTO plotting (student_id, offering_id, status) VALUES $valueSql");
             $insertStmt->execute($insertParams);
+
             $submissionStmt = $conn->prepare('INSERT INTO schedule_submission (student_id, is_submitted, submitted_at) VALUES (:studentId, FALSE, NULL) ON CONFLICT (student_id) DO UPDATE SET is_submitted = FALSE, submitted_at = NULL');
             $submissionStmt->execute([':studentId' => $studentId]);
 
@@ -124,8 +124,10 @@ try {
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
             $stmt = $conn->prepare("DELETE FROM plotting WHERE student_id = ? AND offering_id IN ($placeholders)");
             $stmt->execute(array_merge([$studentId], array_values($offeringIds)));
+
             $submissionStmt = $conn->prepare('INSERT INTO schedule_submission (student_id, is_submitted, submitted_at) VALUES (:studentId, FALSE, NULL) ON CONFLICT (student_id) DO UPDATE SET is_submitted = FALSE, submitted_at = NULL');
             $submissionStmt->execute([':studentId' => $studentId]);
+
             $conn->commit();
             respond(['success' => true]);
         } catch (Exception $e) {
@@ -146,8 +148,13 @@ try {
             $conn->rollBack();
             respond(['success' => false, 'message' => 'Add at least one class before submitting your schedule'], 400);
         }
+
         $submissionStmt = $conn->prepare('INSERT INTO schedule_submission (student_id, is_submitted, submitted_at) VALUES (:studentId, TRUE, CURRENT_TIMESTAMP) ON CONFLICT (student_id) DO UPDATE SET is_submitted = TRUE, submitted_at = CURRENT_TIMESTAMP');
         $submissionStmt->execute([':studentId' => $studentId]);
+
+        $updatePlotting = $conn->prepare("UPDATE plotting SET status = 'Submitted' WHERE TRIM(student_id) = TRIM(:studentId)");
+        $updatePlotting->execute([':studentId' => $studentId]);
+
         $conn->commit();
         respond(['success' => true, 'message' => 'Schedule submitted successfully']);
     }
