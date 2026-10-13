@@ -229,6 +229,26 @@ function scheduleMarkup(schedule){
   if(!schedule.length) return '<div class="student-schedule-empty">No submitted schedule yet.</div>';
   return `<div class="student-schedule"><div class="student-schedule-title">Submitted schedule</div>${schedule.map(course=>`<div class="student-schedule-row"><div><strong>${escapeHtml(course.courseCode)}</strong> ${escapeHtml(course.courseName)}</div><div>${escapeHtml(course.type)} · ${escapeHtml(course.section)}</div><div>${escapeHtml(course.day)}, ${escapeHtml(course.timeRange)} · ${escapeHtml(course.room)} · ${escapeHtml(course.instructor)}</div></div>`).join('')}</div>`;
 }
+async function returnStudentSchedule(studentId){
+  const student=students.find(item=>String(item.id)===String(studentId));
+  if(!student||!confirm(`Return ${student.name}'s submitted schedule? They will be able to revise and resubmit it.`))return;
+  try{
+    const response=await fetch(`${API_URL}?resource=schedule_submission`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'return',studentId:student.studentId})
+    });
+    const result=await response.json();
+    if(!response.ok||result.success===false)throw new Error(result.message||'Could not return schedule');
+    delete studentSchedules[studentId];
+    viewingStudentScheduleId=null;
+    renderStudentsMain();
+    showToast('Schedule returned to student');
+  }catch(error){
+    console.error('Schedule return error',error);
+    showToast(error.message||'Could not return schedule');
+  }
+}
 async function toggleStudentSchedule(studentId){
   viewingStudentScheduleId=String(viewingStudentScheduleId)===String(studentId)?null:String(studentId);
   if(viewingStudentScheduleId && !studentSchedules[studentId]){
@@ -246,12 +266,14 @@ function renderStudentsMain(){
   const filtered=q?students.filter(s=>s.studentId.toLowerCase().includes(q)||s.name.toLowerCase().includes(q)):students;
   const rows=filtered.map(s=>{
     const expanded=String(viewingStudentScheduleId)===String(s.id);
-    return `<div class="student-entry"><div class="student-row" data-id="${s.id}"><div class="student-info"><div class="student-avatar">${escapeHtml(initials(s.name||'?'))}</div><div><div class="student-name">${escapeHtml(s.name)}</div><div class="student-id">ID: ${escapeHtml(s.studentId)}${s.yearLevel?` · Year ${escapeHtml(s.yearLevel)}`:''}${s.semester?` · Semester ${escapeHtml(s.semester)}`:''}</div></div></div><div class="student-actions"><button class="view-schedule-btn" data-id="${s.id}">${expanded?'Hide schedule':'View schedule'}</button></div></div>${expanded?scheduleMarkup(studentSchedules[s.id]||[]):''}</div>`;
+    const hasSchedule=(studentSchedules[s.id]||[]).length>0;
+    return `<div class="student-entry"><div class="student-row" data-id="${s.id}"><div class="student-info"><div class="student-avatar">${escapeHtml(initials(s.name||'?'))}</div><div><div class="student-name">${escapeHtml(s.name)}</div><div class="student-id">ID: ${escapeHtml(s.studentId)}${s.yearLevel?` · Year ${escapeHtml(s.yearLevel)}`:''}${s.semester?` · Semester ${escapeHtml(s.semester)}`:''}</div></div></div><div class="student-actions"><button class="view-schedule-btn" data-id="${s.id}">${expanded?'Hide schedule':'View schedule'}</button>${expanded&&hasSchedule?`<button class="return-schedule-btn" data-student-id="${encodeURIComponent(s.id)}">Return schedule</button>`:''}</div></div>${expanded?scheduleMarkup(studentSchedules[s.id]||[]):''}</div>`;
   }).join('');
   el.innerHTML=`<div class="students-header"><div><h1>Students</h1><p>View student accounts and their submitted schedules.</p></div></div><div class="search-row"><div class="search-box"><input type="text" id="studentSearchInput" placeholder="Search by student ID or name" value="${escapeHtml(studentSearch)}"></div></div>${!students.length?'<div class="no-results"><h3>No students yet</h3><p>Students appear here after they register.</p></div>':!filtered.length?`<div class="no-results"><h3>No matches</h3><p>No student found for "${escapeHtml(studentSearch)}".</p></div>`:`<div class="students-table">${rows}</div>`}`;
   const input=document.getElementById('studentSearchInput');
   input.addEventListener('input',e=>{studentSearch=e.target.value;renderStudentsMain();const next=document.getElementById('studentSearchInput');next.focus();next.setSelectionRange(next.value.length,next.value.length);});
   el.querySelectorAll('.view-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>toggleStudentSchedule(btn.dataset.id)));
+  el.querySelectorAll('.return-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>returnStudentSchedule(decodeURIComponent(btn.dataset.studentId))));
 }
 const renderSidebarBase=renderSidebar;
 renderSidebar=function(){renderSidebarBase();document.getElementById('navSettings').classList.toggle('active',currentView==='settings');if(currentView==='settings')document.getElementById('sidebarBody').innerHTML='<div class="sidebar-note">Manage semester-wide admin actions here.</div>';};

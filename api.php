@@ -200,6 +200,26 @@ try {
         respond(['success' => false, 'message' => 'POST required'], 405);
     }
 
+    if ($resource === 'schedule_submission' && ($data['action'] ?? '') === 'return') {
+        $studentId = trim((string) ($data['studentId'] ?? ''));
+        if ($studentId === '') {
+            respond(['success' => false, 'message' => 'Student ID is required'], 400);
+        }
+
+        $conn->beginTransaction();
+        $submissionStmt = $conn->prepare('UPDATE schedule_submission SET is_submitted = FALSE, submitted_at = NULL WHERE TRIM(student_id) = TRIM(:studentId) AND is_submitted = TRUE');
+        $submissionStmt->execute([':studentId' => $studentId]);
+        if ($submissionStmt->rowCount() === 0) {
+            $conn->rollBack();
+            respond(['success' => false, 'message' => 'No submitted schedule was found to return'], 409);
+        }
+
+        $plottingStmt = $conn->prepare("UPDATE plotting SET status = 'Enrolled' WHERE TRIM(student_id) = TRIM(:studentId)");
+        $plottingStmt->execute([':studentId' => $studentId]);
+        $conn->commit();
+        respond(['success' => true, 'message' => 'Schedule returned successfully']);
+    }
+
     if (($data['action'] ?? '') === 'delete') {
         $id = $data['id'] ?? null;
         if (!is_numeric($id)) {
