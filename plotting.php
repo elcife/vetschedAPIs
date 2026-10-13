@@ -123,7 +123,6 @@ try {
         try {
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
 
-            // Delete all offerings that share the same section_id and subject_id as the target offeringIds
             $stmt = $conn->prepare("
                 DELETE FROM plotting
                 WHERE TRIM(student_id) = TRIM(?)
@@ -168,6 +167,23 @@ try {
 
         $conn->commit();
         respond(['success' => true, 'message' => 'Schedule submitted successfully']);
+    }
+
+    if ($resource === 'clear_schedule') {
+        $studentId = trim((string) ($data['studentId'] ?? ''));
+        if ($studentId === '') {
+            respond(['success' => false, 'message' => 'Student ID is required'], 400);
+        }
+        $conn->beginTransaction();
+
+        $stmt = $conn->prepare("DELETE FROM plotting WHERE TRIM(student_id) = TRIM(:studentId)");
+        $stmt->execute([':studentId' => $studentId]);
+
+        $subStmt = $conn->prepare("DELETE FROM schedule_submission WHERE TRIM(student_id) = TRIM(:studentId)");
+        $subStmt->execute([':studentId' => $studentId]);
+
+        $conn->commit();
+        respond(['success' => true, 'message' => 'Schedule cleared successfully']);
     }
 
     respond(['success' => false, 'message' => 'Unknown POST resource'], 404);
