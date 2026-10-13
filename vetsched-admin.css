@@ -399,6 +399,8 @@ button{font-family:inherit;}
 }
 .students-header h1{font-size:2rem;margin:0 0 6px 0;}
 .students-header p{color:var(--charcoal-soft);margin:0;font-size:0.93rem;}
+.students-refresh-btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
+.students-refresh-btn svg{width:16px;height:16px;}
 .search-row{
   display:flex;
   gap:10px;
