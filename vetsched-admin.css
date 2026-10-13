@@ -480,6 +480,9 @@ button{font-family:inherit;}
 .student-schedule-title{padding:9px 12px;background:var(--sage-soft);color:var(--forest-dark);font-size:.8rem;font-weight:700;}
 .student-schedule-row{padding:10px 12px;border-top:1px solid #e2ead9;color:var(--charcoal-soft);font-size:.8rem;line-height:1.55;}
 .student-schedule-row strong{color:var(--forest-dark);}
+.student-schedule-actions{display:flex;justify-content:flex-end;padding:10px 12px;border-top:1px solid #e2ead9;}
+.return-schedule-btn{border:1px solid var(--danger);border-radius:9px;background:#fff8f4;color:var(--danger);padding:8px 12px;font:700 .8rem Inter,sans-serif;cursor:pointer;transition:background .12s ease;}
+.return-schedule-btn:hover{background:#f6e6e0;}
 .student-schedule-empty{margin:0 18px 14px 72px;padding:12px;border:1px dashed var(--line);border-radius:12px;color:var(--charcoal-soft);font-size:.84rem;}
 .no-results{
   text-align:center;
