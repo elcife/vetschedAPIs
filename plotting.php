@@ -32,6 +32,23 @@ $resource = $_GET['resource'] ?? '';
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if ($resource === 'submission_status') {
+            $studentId = $_GET['studentId'] ?? '';
+            if (!$studentId) respond(['success' => false, 'message' => 'Student ID required'], 400);
+
+            $stmt = $conn->prepare('SELECT is_submitted, submitted_at FROM schedule_submission WHERE TRIM(student_id) = TRIM(:studentId) LIMIT 1');
+            $stmt->execute([':studentId' => $studentId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            $rawSub = $row['is_submitted'] ?? false;
+            $isSub = ($rawSub === true || $rawSub === 't' || $rawSub === '1' || $rawSub === 1 || $rawSub === 'true');
+
+            respond([
+                'isSubmitted' => $isSub,
+                'submittedAt' => $row['submitted_at'] ?? null
+            ]);
+        }
+
         if ($resource === 'enrolled_courses') {
             $studentId = $_GET['studentId'] ?? '';
             if (!$studentId) respond(['success' => false, 'message' => 'Student ID required'], 400);
