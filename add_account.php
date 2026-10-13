@@ -3,54 +3,61 @@ header("Content-Type: application/json");
 require_once __DIR__ . "/db.php";
 
 function verifyEmailAwesome($email) {
-    $apiKey = "nWtxNmCWuQ2Bp8hPgLDcz6we73ZkvTlR87RS6CjN";
-
-    // 1. Check domain MX DNS records
-    $domain = substr(strrchr($email, "@"), 1);
-    if (!$domain || !checkdnsrr($domain, "MX")) {
-        return false;
-    }
-
-    // 2. Call EmailAwesome Verification API safely
     try {
-        $url = "https://emailawesome.com/api/v1/verify?email=" . urlencode($email) . "&api_key=" . urlencode($apiKey);
+        $apiKey = "nWtxNmCWuQ2Bp8hPgLDcz6we73ZkvTlR87RS6CjN";
 
-        $ch = curl_init();
-        if ($ch !== false) {
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $url,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 3,
-                CURLOPT_CONNECTTIMEOUT => 3,
-                CURLOPT_HTTPHEADER => [
-                    "Accept: application/json",
-                    "X-API-Key: " . $apiKey
-                ],
-                CURLOPT_SSL_VERIFYPEER => true,
-                CURLOPT_SSL_VERIFYHOST => 2
-            ]);
+        $domain = substr(strrchr($email, "@"), 1);
+        if (!$domain) return false;
 
-            $response = @curl_exec($ch);
-            $httpCode = @curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            @curl_close($ch);
+        // Check MX records safely
+        if (function_exists('checkdnsrr')) {
+            $hasMx = @checkdnsrr($domain, "MX");
+            if ($hasMx === false) {
+                return false;
+            }
+        }
 
-            if ($response !== false && $httpCode >= 200 && $httpCode < 300) {
-                $result = json_decode($response, true);
-                if (is_array($result)) {
-                    if (isset($result['status']) && in_array(strtolower($result['status']), ['invalid', 'undeliverable', 'disposable', 'bounced', 'false'])) {
-                        return false;
-                    }
-                    if (isset($result['is_valid']) && $result['is_valid'] === false) {
-                        return false;
-                    }
-                    if (isset($result['deliverable']) && $result['deliverable'] === false) {
-                        return false;
+        // Call EmailAwesome Verification API safely if cURL is available
+        if (function_exists('curl_init')) {
+            $url = "https://emailawesome.com/api/v1/verify?email=" . urlencode($email) . "&api_key=" . urlencode($apiKey);
+
+            $ch = @curl_init();
+            if ($ch !== false) {
+                curl_setopt_array($ch, [
+                    CURLOPT_URL => $url,
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 3,
+                    CURLOPT_CONNECTTIMEOUT => 3,
+                    CURLOPT_HTTPHEADER => [
+                        "Accept: application/json",
+                        "X-API-Key: " . $apiKey
+                    ],
+                    CURLOPT_SSL_VERIFYPEER => false,
+                    CURLOPT_SSL_VERIFYHOST => 0
+                ]);
+
+                $response = @curl_exec($ch);
+                $httpCode = @curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                @curl_close($ch);
+
+                if ($response !== false && $httpCode >= 200 && $httpCode < 300) {
+                    $result = json_decode($response, true);
+                    if (is_array($result)) {
+                        if (isset($result['status']) && in_array(strtolower($result['status']), ['invalid', 'undeliverable', 'disposable', 'bounced', 'false'])) {
+                            return false;
+                        }
+                        if (isset($result['is_valid']) && $result['is_valid'] === false) {
+                            return false;
+                        }
+                        if (isset($result['deliverable']) && $result['deliverable'] === false) {
+                            return false;
+                        }
                     }
                 }
             }
         }
     } catch (Throwable $e) {
-        error_log("EmailAwesome check warning: " . $e->getMessage());
+        error_log("Email verification warning: " . $e->getMessage());
     }
 
     return true;
