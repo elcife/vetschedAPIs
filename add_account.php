@@ -1,6 +1,6 @@
 <?php
 header("Content-Type: application/json");
-require_once "db.php";
+require_once __DIR__ . "/db.php";
 
 function verifyEmailAwesome($email) {
     $apiKey = "nWtxNmCWuQ2Bp8hPgLDcz6we73ZkvTlR87RS6CjN";
