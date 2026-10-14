@@ -6,7 +6,7 @@
 <title>Vetsched Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="vetsched-admin.css?v=20261014-remove-instructor">
+<link rel="stylesheet" href="vetsched-admin.css?v=20261014-instructor-delete-dialog">
 </head>
 <body>
 
@@ -189,6 +189,17 @@
   </div>
 </div>
 
+<div class="overlay" id="removeInstructorOverlay">
+  <div class="modal instructor-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="removeInstructorTitle" aria-describedby="removeInstructorMessage">
+    <h3 id="removeInstructorTitle">Remove instructor?</h3>
+    <p id="removeInstructorMessage"></p>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="cancelRemoveInstructor">Cancel</button>
+      <button type="button" class="danger-action-btn" id="confirmRemoveInstructor">Delete instructor</button>
+    </div>
+  </div>
+</div>
+
 <!-- Student modal -->
 <div class="overlay" id="studentOverlay">
   <div class="modal">
@@ -212,6 +223,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="vetsched-admin.js?v=20261014-remove-instructor"></script>
+<script src="vetsched-admin.js?v=20261014-instructor-delete-dialog"></script>
 </body>
 </html>

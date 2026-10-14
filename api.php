@@ -269,12 +269,8 @@ try {
                 $conn->rollBack();
                 respond(['success' => false, 'message' => 'Instructor not found'], 404);
             }
-            $usage = $conn->prepare('SELECT 1 FROM offering WHERE instructor_id = :id LIMIT 1');
-            $usage->execute([':id' => (int) $id]);
-            if ($usage->fetchColumn()) {
-                $conn->rollBack();
-                respond(['success' => false, 'message' => 'This instructor is assigned to a class. Reassign or remove those classes before deleting the instructor.'], 409);
-            }
+            $clearAssignments = $conn->prepare('UPDATE offering SET instructor_id = NULL WHERE instructor_id = :id');
+            $clearAssignments->execute([':id' => (int) $id]);
             $stmt = $conn->prepare('DELETE FROM instructor WHERE instructor_id = :id');
             $stmt->execute([':id' => (int) $id]);
             if ($stmt->rowCount() === 0) {
