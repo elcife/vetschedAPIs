@@ -145,6 +145,8 @@ button{font-family:inherit;}
 .danger-action-btn{border:1px solid var(--danger);border-radius:11px;background:var(--danger);color:var(--paper);padding:11px 18px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .12s ease, transform .1s ease;}
 .danger-action-btn:hover{background:#9c4129;}
 .danger-action-btn:active{transform:scale(0.98);}
+.instructor-confirm-modal p{margin:0;color:var(--charcoal-soft);font-size:.92rem;line-height:1.6;}
+.instructor-confirm-modal .modal-actions{margin-top:24px;}
 
 .add-subject-btn{
   width:100%;
