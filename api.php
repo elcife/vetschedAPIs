@@ -112,7 +112,7 @@ try {
                            s.is_open AS \"isOpen\",
                            s.subject_id AS \"subjectId\",
                            s.max_capacity AS \"maxCapacity\",
-                           COUNT(DISTINCT p.student_id) AS \"enrollmentCount\"
+                                    COUNT(DISTINCT ss.student_id) AS \"enrollmentCount\"
                     FROM section s
                     LEFT JOIN (
                         SELECT section_id, offering_id FROM offering WHERE section_id IS NOT NULL
@@ -122,6 +122,8 @@ try {
                         INNER JOIN schedule sc ON sc.schedule_id = o.schedule_id
                     ) so ON so.section_id = s.section_id
                     LEFT JOIN plotting p ON p.offering_id = so.offering_id
+                    LEFT JOIN schedule_submission ss
+                        ON TRIM(ss.student_id) = TRIM(p.student_id) AND ss.is_submitted = TRUE
                     GROUP BY s.section_id, s.section_name, s.is_open, s.subject_id, s.max_capacity
                     ORDER BY s.section_id";
             $rows = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
