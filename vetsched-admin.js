@@ -333,7 +333,10 @@ function renderSettingsMain(){
           </div>
           <div class="field">
             <label for="newManagedAdminPassword">Password</label>
-            <input type="password" id="newManagedAdminPassword" minlength="10" autocomplete="new-password" required>
+            <div class="password-input-wrap">
+              <input type="password" id="newManagedAdminPassword" minlength="10" autocomplete="new-password" required>
+              <button type="button" class="password-toggle-btn" id="newAdminPasswordToggle" aria-label="Show password" aria-pressed="false">Show</button>
+            </div>
           </div>
           <div class="field">
             <label for="newAdminDisplayName">Display_Name</label>
@@ -364,8 +367,20 @@ function renderSettingsMain(){
   document.getElementById('setSemesterBtn').addEventListener('click', setSemester);
   if(currentAdminRole === 'super_admin'){
     document.getElementById('createAdminForm').addEventListener('submit', createAdminAccount);
+    document.getElementById('newAdminPasswordToggle').addEventListener('click',toggleNewAdminPassword);
     loadAdminAccounts();
   }
+}
+function toggleNewAdminPassword(){
+  const input=document.getElementById('newManagedAdminPassword');
+  const toggle=document.getElementById('newAdminPasswordToggle');
+  const showPassword=input.type==='password';
+  input.type=showPassword?'text':'password';
+  toggle.textContent=showPassword?'Hide':'Show';
+  toggle.setAttribute('aria-label',showPassword?'Hide password':'Show password');
+  toggle.setAttribute('aria-pressed',String(showPassword));
+  input.focus();
+  input.setSelectionRange(input.value.length,input.value.length);
 }
 async function requestAdminAccounts(action, fields={}){
   const response=await fetch(`${API_URL}?resource=admin`,{
