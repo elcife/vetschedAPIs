@@ -302,15 +302,24 @@ function renderSettingsMain(){
         <div class="settings-password-form">
           <div class="field">
             <label for="currentAdminPassword">Current password</label>
-            <input type="password" id="currentAdminPassword" autocomplete="current-password">
+            <div class="password-input-wrap">
+              <input type="password" id="currentAdminPassword" autocomplete="current-password">
+              <button type="button" class="password-toggle-btn" data-password-target="currentAdminPassword" aria-label="Show current password" aria-pressed="false">Show</button>
+            </div>
           </div>
           <div class="field">
             <label for="newAdminPassword">New password</label>
-            <input type="password" id="newAdminPassword" autocomplete="new-password">
+            <div class="password-input-wrap">
+              <input type="password" id="newAdminPassword" autocomplete="new-password">
+              <button type="button" class="password-toggle-btn" data-password-target="newAdminPassword" aria-label="Show new password" aria-pressed="false">Show</button>
+            </div>
           </div>
           <div class="field">
             <label for="confirmAdminPassword">Confirm new password</label>
-            <input type="password" id="confirmAdminPassword" autocomplete="new-password">
+            <div class="password-input-wrap">
+              <input type="password" id="confirmAdminPassword" autocomplete="new-password">
+              <button type="button" class="password-toggle-btn" data-password-target="confirmAdminPassword" aria-label="Show confirmed password" aria-pressed="false">Show</button>
+            </div>
           </div>
           <div class="settings-form-actions">
             <button class="btn-primary" id="changePasswordBtn">Update password</button>
@@ -364,6 +373,7 @@ function renderSettingsMain(){
     </div>
   `;
   document.getElementById('changePasswordBtn').addEventListener('click', changeAdminPassword);
+  document.querySelectorAll('[data-password-target]').forEach(toggle=>toggle.addEventListener('click',()=>togglePasswordVisibility(toggle)));
   document.getElementById('setSemesterBtn').addEventListener('click', setSemester);
   if(currentAdminRole === 'super_admin'){
     document.getElementById('createAdminForm').addEventListener('submit', createAdminAccount);
@@ -378,6 +388,17 @@ function toggleNewAdminPassword(){
   input.type=showPassword?'text':'password';
   toggle.textContent=showPassword?'Hide':'Show';
   toggle.setAttribute('aria-label',showPassword?'Hide password':'Show password');
+  toggle.setAttribute('aria-pressed',String(showPassword));
+  input.focus();
+  input.setSelectionRange(input.value.length,input.value.length);
+}
+function togglePasswordVisibility(toggle){
+  const input=document.getElementById(toggle.dataset.passwordTarget);
+  const showPassword=input.type==='password';
+  input.type=showPassword?'text':'password';
+  toggle.textContent=showPassword?'Hide':'Show';
+  const label=input.labels?.[0]?.textContent.trim()||'password';
+  toggle.setAttribute('aria-label',`${showPassword?'Hide':'Show'} ${label.toLowerCase()}`);
   toggle.setAttribute('aria-pressed',String(showPassword));
   input.focus();
   input.setSelectionRange(input.value.length,input.value.length);
