@@ -83,7 +83,7 @@ async function attemptLogin(){
 
     currentAdminUsername = result.admin?.username || user;
     currentAdminPassword = pass;
-    currentAdminRole = result.admin?.role || 'admin';
+    currentAdminRole = String(result.admin?.role || 'admin').trim().toLowerCase();
     currentAdmin = result.admin?.display_name || currentAdminUsername;
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appRoot').style.display='flex';
@@ -323,21 +323,21 @@ function renderSettingsMain(){
       ${currentAdminRole === 'super_admin' ? `
       <section class="settings-card">
         <div>
-          <h2>Admin accounts</h2>
+          <h2>Add a Admin Account</h2>
           <p>Create and remove admin accounts. Super-admin accounts cannot be removed here.</p>
         </div>
         <form class="settings-password-form" id="createAdminForm" autocomplete="off">
           <div class="field">
-            <label for="newAdminUsername">Admin username</label>
+            <label for="newAdminUsername">Username</label>
             <input type="text" id="newAdminUsername" maxlength="50" autocomplete="off" required>
           </div>
           <div class="field">
-            <label for="newAdminDisplayName">Admin display name</label>
-            <input type="text" id="newAdminDisplayName" maxlength="100" autocomplete="off" required>
+            <label for="newManagedAdminPassword">Password</label>
+            <input type="password" id="newManagedAdminPassword" minlength="10" autocomplete="new-password" required>
           </div>
           <div class="field">
-            <label for="newManagedAdminPassword">Admin password</label>
-            <input type="password" id="newManagedAdminPassword" minlength="10" autocomplete="new-password" required>
+            <label for="newAdminDisplayName">Display_Name</label>
+            <input type="text" id="newAdminDisplayName" maxlength="100" autocomplete="off" required>
           </div>
           <div class="settings-form-actions">
             <button class="btn-primary" type="submit" id="createAdminBtn">Create admin account</button>
