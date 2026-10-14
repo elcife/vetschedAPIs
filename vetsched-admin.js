@@ -156,6 +156,28 @@ function renderInstructorOptions(selectEl, selectedName = '') {
   }
   if (!value) selectEl.value = '';
 }
+function updateInstructorRemoveButton(selectEl,button){
+  if(!selectEl||!button)return;
+  const instructor=instructors.find(item=>String(item.name||item.instructor_name||'').toLowerCase()===selectEl.value.toLowerCase());
+  button.disabled=!instructor;
+  button.dataset.instructorId=instructor?.id??instructor?.instructor_id??'';
+  button.dataset.instructorName=instructor?.name??instructor?.instructor_name??'';
+}
+async function removeInstructor(button,selectEl){
+  const instructorId=button.dataset.instructorId;
+  const instructorName=button.dataset.instructorName;
+  if(!instructorId||!instructorName)return;
+  if(!confirm(`Remove instructor "${instructorName}"? Instructors assigned to classes cannot be removed.`))return;
+  if(!await deleteRecord('instructors',instructorId))return;
+  instructors=instructors.filter(item=>String(item.id??item.instructor_id)!==String(instructorId));
+  document.querySelectorAll('#classInstructor,.slot-instructor-select').forEach(select=>{
+    const selected=select.value.toLowerCase()===instructorName.toLowerCase()?'':select.value;
+    renderInstructorOptions(select,selected);
+    updateInstructorRemoveButton(select,select.closest('.instructor-select-row')?.querySelector('.instructor-remove-btn'));
+  });
+  if(selectEl)selectEl.focus();
+  showToast('Instructor removed');
+}
 async function createInstructor(name){
   const instructorName = String(name || '').trim();
   if (!instructorName) return null;
@@ -618,7 +640,7 @@ sectionToggleObserver.observe(document.getElementById('mainInner'),{childList:tr
 function classSlotMarkup(slot = {}) {
 	const days = new Set(slot.days || []);
 	const dayButtons = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day => `<button type="button" class="day-toggle slot-day-toggle ${days.has(day) ? 'on' : ''}" data-day="${day}" aria-pressed="${days.has(day)}">${day}</button>`).join('');
-	const instructorSelect = `<select class="slot-instructor-select">${instructors.map(instructor => `<option value="${escapeHtml(instructor.name || '')}" ${String(instructor.name || '').toLowerCase() === String(slot.instructor || '').toLowerCase() ? 'selected' : ''}>${escapeHtml(instructor.name || '')}</option>`).join('')}<option value="__new__">+ Add new instructor</option></select>`;
+	const instructorSelect = `<div class="instructor-select-row"><select class="slot-instructor-select">${instructors.map(instructor => `<option value="${escapeHtml(instructor.name || '')}" ${String(instructor.name || '').toLowerCase() === String(slot.instructor || '').toLowerCase() ? 'selected' : ''}>${escapeHtml(instructor.name || '')}</option>`).join('')}<option value="__new__">+ Add new instructor</option></select><button type="button" class="instructor-remove-btn" aria-label="Remove selected instructor" title="Remove selected instructor" disabled>&minus;</button></div>`;
 	return `<div class="class-slot">
 		<div class="field-row">
 			<div class="field"><label>Class type</label><select class="slot-class-type"><option value="Lecture" ${slot.classType === 'Lecture' ? 'selected' : ''}>Lecture</option><option value="Lab" ${slot.classType === 'Lab' ? 'selected' : ''}>Lab</option></select></div>
@@ -636,13 +658,17 @@ function renderClassSlots(slots) {
 	document.querySelectorAll('.slot-instructor-select').forEach(select => {
 		const currentValue = select.value || '';
 		renderInstructorOptions(select, currentValue);
+		const removeButton=select.closest('.instructor-select-row').querySelector('.instructor-remove-btn');
+		updateInstructorRemoveButton(select,removeButton);
 		select.addEventListener('change', async () => {
 			if (select.value === '__new__') {
 				const previous = currentValue || '';
 				select.value = previous;
 				await promptForInstructor(select, previous);
 			}
+			updateInstructorRemoveButton(select,removeButton);
 		});
+		removeButton.addEventListener('click',()=>removeInstructor(removeButton,select));
 	});
 	document.querySelectorAll('.remove-class-slot').forEach(button => button.addEventListener('click', () => { button.closest('.class-slot').remove(); }));
 }
@@ -670,8 +696,8 @@ function readClassForm(){const instructorSelect=document.getElementById('classIn
 function findScheduleConflict(classes){for(let index=0;index<classes.length;index++){for(let otherIndex=index+1;otherIndex<classes.length;otherIndex++){const first=classes[index],second=classes[otherIndex],sameDay=(first.days||[]).filter(day=>(second.days||[]).includes(day));if(sameDay.length&&first.start<second.end&&second.start<first.end)return{first,second,days:sameDay};}}return null;}
 function clearScheduleConflictState(){const modal=document.querySelector('#classOverlay .modal');if(modal)modal.classList.remove('schedule-conflict');}
 function refuseScheduleConflict(){const modal=document.querySelector('#classOverlay .modal'),saveButton=document.getElementById('saveClass');if(!modal)return;modal.classList.remove('schedule-conflict');void modal.offsetWidth;modal.classList.add('schedule-conflict');saveButton?.focus();setTimeout(()=>modal.classList.remove('schedule-conflict'),700);}
-function openAddClassModal(sectionId){const section=sections.find(item=>String(item.id)===String(sectionId));if(!section)return;classSectionId=section.id;editingClassIndex=null;clearScheduleConflictState();document.getElementById('classModalTitle').textContent=`Add class to ${section.type}`;document.getElementById('classTypeInput').value='Lecture';document.getElementById('classStartTime').value='';document.getElementById('classEndTime').value='';renderInstructorOptions(document.getElementById('classInstructor'), '');document.getElementById('classRoom').value='';clearErrors(['classDayError','classTimeError','classInstructorError']);setClassDayPicker([]);document.getElementById('classOverlay').classList.add('open');}
-function openEditClassModal(sectionId,index){const section=sections.find(item=>String(item.id)===String(sectionId)),classEntry=section?.classes?.[index];if(!section||!classEntry)return;classSectionId=section.id;editingClassIndex=index;clearScheduleConflictState();document.getElementById('classModalTitle').textContent=`Edit class in ${section.type}`;document.getElementById('classTypeInput').value=classEntry.classType||'Lecture';document.getElementById('classStartTime').value=classEntry.start||'';document.getElementById('classEndTime').value=classEntry.end||'';renderInstructorOptions(document.getElementById('classInstructor'), classEntry.instructor || '');document.getElementById('classRoom').value=classEntry.room||'';clearErrors(['classDayError','classTimeError','classInstructorError']);setClassDayPicker(classEntry.days||[]);document.getElementById('classOverlay').classList.add('open');}
+function openAddClassModal(sectionId){const section=sections.find(item=>String(item.id)===String(sectionId));if(!section)return;classSectionId=section.id;editingClassIndex=null;clearScheduleConflictState();document.getElementById('classModalTitle').textContent=`Add class to ${section.type}`;document.getElementById('classTypeInput').value='Lecture';document.getElementById('classStartTime').value='';document.getElementById('classEndTime').value='';const instructorSelect=document.getElementById('classInstructor');renderInstructorOptions(instructorSelect, '');instructorSelect.dataset.previousValue='';updateInstructorRemoveButton(instructorSelect,document.getElementById('removeClassInstructor'));document.getElementById('classRoom').value='';clearErrors(['classDayError','classTimeError','classInstructorError']);setClassDayPicker([]);document.getElementById('classOverlay').classList.add('open');}
+function openEditClassModal(sectionId,index){const section=sections.find(item=>String(item.id)===String(sectionId)),classEntry=section?.classes?.[index];if(!section||!classEntry)return;classSectionId=section.id;editingClassIndex=index;clearScheduleConflictState();document.getElementById('classModalTitle').textContent=`Edit class in ${section.type}`;document.getElementById('classTypeInput').value=classEntry.classType||'Lecture';document.getElementById('classStartTime').value=classEntry.start||'';document.getElementById('classEndTime').value=classEntry.end||'';const instructorSelect=document.getElementById('classInstructor');renderInstructorOptions(instructorSelect,classEntry.instructor||'');instructorSelect.dataset.previousValue=instructorSelect.value;updateInstructorRemoveButton(instructorSelect,document.getElementById('removeClassInstructor'));document.getElementById('classRoom').value=classEntry.room||'';clearErrors(['classDayError','classTimeError','classInstructorError']);setClassDayPicker(classEntry.days||[]);document.getElementById('classOverlay').classList.add('open');}
 function closeClassModal(){editingClassIndex=null;clearScheduleConflictState();document.getElementById('classOverlay').classList.remove('open');}
 async function saveClass(){const section=sections.find(item=>String(item.id)===String(classSectionId));if(!section)return;const classEntry=readClassForm(),timeOk=classEntry.start&&classEntry.end&&classEntry.start<classEntry.end,oneDayOnly=classEntry.days.length===1;document.getElementById('classDayError').style.display=oneDayOnly?'none':'block';document.getElementById('classTimeError').style.display=timeOk?'none':'block';document.getElementById('classInstructorError').style.display=classEntry.instructor?'none':'block';if(!oneDayOnly||!timeOk||!classEntry.instructor)return;const classes=[...(section.classes||[])];if(editingClassIndex===null)classes.push(classEntry);else classes[editingClassIndex]=classEntry;const conflict=findScheduleConflict(classes);if(conflict){refuseScheduleConflict();showToast(`Schedule conflict on ${conflict.days.join(', ')}: class times overlap`);return;}const payload={id:section.id,subjectId:section.subjectId,type:section.type,maxCapacity:section.maxCapacity,classes,isOpen:section.isOpen};if(!await saveList('sections',[payload]))return;const wasEditing=editingClassIndex!==null;editingClassIndex=null;closeClassModal();await refreshFromDatabase(true);showToast(wasEditing?'Class updated':'Class added');}
 async function deleteClass(sectionId,index){const section=sections.find(item=>String(item.id)===String(sectionId)),classEntry=section?.classes?.[index];if(!section||!classEntry)return;const label=`${classEntry.classType||'Class'} on ${formatDays(classEntry.days).join(', ')}`;if(!confirm(`Delete this class (${label})? This cannot be undone.`))return;const classes=(section.classes||[]).filter((item,classIndex)=>classIndex!==index);const payload={id:section.id,subjectId:section.subjectId,type:section.type,maxCapacity:section.maxCapacity,classes,isOpen:section.isOpen};if(!await saveList('sections',[payload]))return;await refreshFromDatabase(true);showToast('Class deleted');}
@@ -684,7 +710,9 @@ document.getElementById('classInstructor').addEventListener('change', async () =
     await promptForInstructor(select, previous);
   }
   select.dataset.previousValue = select.value;
+  updateInstructorRemoveButton(select,document.getElementById('removeClassInstructor'));
 });
+document.getElementById('removeClassInstructor').addEventListener('click',event=>removeInstructor(event.currentTarget,document.getElementById('classInstructor')));
 document.getElementById('cancelClass').addEventListener('click',closeClassModal);document.getElementById('saveClass').addEventListener('click',saveClass);
 const classCardObserver=new MutationObserver(()=>{document.querySelectorAll('.section-card').forEach(card=>{if(card.querySelector('.add-class-btn'))return;const button=document.createElement('button');button.className='icon-btn add-class-btn';button.textContent='Add class';button.title='Add class';button.addEventListener('click',()=>openAddClassModal(card.dataset.id));const actions=card.querySelector('.section-actions');if(actions)actions.appendChild(button);});});classCardObserver.observe(document.getElementById('mainInner'),{childList:true,subtree:true});
 const classListObserver=new MutationObserver(()=>{document.querySelectorAll('.section-card').forEach(card=>{if(card.querySelector('.section-class-list'))return;const section=sections.find(item=>String(item.id)===String(card.dataset.id));if(!section)return;const summary=card.querySelector('.section-sub');if(summary)summary.style.display='none';const remaining=document.createElement('div');remaining.className='section-remaining';remaining.textContent=`Remaining slots: ${section.remainingSeats ?? Math.max(Number(section.maxCapacity||0)-Number(section.enrollmentCount||0),0)}/${section.maxCapacity||0}`;const list=document.createElement('div');list.className='section-class-list';const classes=section.classes||[];list.innerHTML=classes.length?classes.map((item,index)=>`<div class="section-class-row"><strong>${escapeHtml(item.classType||'Lecture')}</strong><span>${formatDays(item.days).join(', ')} ${fmtTime(item.start)} - ${fmtTime(item.end)}</span><span>${escapeHtml(item.instructor||'')}</span><span>${escapeHtml(item.room||'No room')}</span><button type="button" class="edit-class-btn" data-class-index="${index}">Edit class</button><button type="button" class="delete-class-btn" data-class-index="${index}">Delete class</button></div>`).join(''):'<div class="section-empty-class">If empty, add a class.</div>';list.querySelectorAll('.edit-class-btn').forEach(button=>button.addEventListener('click',()=>openEditClassModal(section.id,Number(button.dataset.classIndex))));list.querySelectorAll('.delete-class-btn').forEach(button=>button.addEventListener('click',()=>deleteClass(section.id,Number(button.dataset.classIndex))));const titleRow=card.querySelector('.section-title-row');if(titleRow)titleRow.after(remaining);if(summary)summary.after(list);else card.querySelector('.section-main')?.append(list);});});classListObserver.observe(document.getElementById('mainInner'),{childList:true,subtree:true});

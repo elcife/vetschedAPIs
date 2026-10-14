@@ -262,6 +262,25 @@ try {
             $stmt->execute([':id' => $id]);
             $stmt = $conn->prepare('DELETE FROM subject WHERE subject_id = :id');
             $stmt->execute([':id' => $id]);
+        } elseif ($resource === 'instructors') {
+            $lockInstructor = $conn->prepare('SELECT instructor_id FROM instructor WHERE instructor_id = :id FOR UPDATE');
+            $lockInstructor->execute([':id' => (int) $id]);
+            if (!$lockInstructor->fetchColumn()) {
+                $conn->rollBack();
+                respond(['success' => false, 'message' => 'Instructor not found'], 404);
+            }
+            $usage = $conn->prepare('SELECT 1 FROM offering WHERE instructor_id = :id LIMIT 1');
+            $usage->execute([':id' => (int) $id]);
+            if ($usage->fetchColumn()) {
+                $conn->rollBack();
+                respond(['success' => false, 'message' => 'This instructor is assigned to a class. Reassign or remove those classes before deleting the instructor.'], 409);
+            }
+            $stmt = $conn->prepare('DELETE FROM instructor WHERE instructor_id = :id');
+            $stmt->execute([':id' => (int) $id]);
+            if ($stmt->rowCount() === 0) {
+                $conn->rollBack();
+                respond(['success' => false, 'message' => 'Instructor not found'], 404);
+            }
         } else {
             $conn->rollBack();
             respond(['success' => false, 'message' => 'Unknown delete resource'], 404);

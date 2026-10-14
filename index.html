@@ -6,7 +6,7 @@
 <title>Vetsched Admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="vetsched-admin.css?v=20261014-admin-accounts">
+<link rel="stylesheet" href="vetsched-admin.css?v=20261014-remove-instructor">
 </head>
 <body>
 
@@ -175,7 +175,10 @@
     <div class="field-error" id="classTimeError">End time must be after start time.</div>
     <div class="field">
       <label for="classInstructor">Instructor</label>
-      <select id="classInstructor"></select>
+      <div class="instructor-select-row">
+        <select id="classInstructor"></select>
+        <button type="button" class="instructor-remove-btn" id="removeClassInstructor" aria-label="Remove selected instructor" title="Remove selected instructor" disabled>&minus;</button>
+      </div>
       <div class="field-error" id="classInstructorError">Select an instructor.</div>
     </div>
     <div class="field"><label for="classRoom">Room / location (optional)</label><input type="text" id="classRoom" placeholder="e.g. Surgery Hall 2"></div>
@@ -209,6 +212,6 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="vetsched-admin.js?v=20261014-admin-password-toggle"></script>
+<script src="vetsched-admin.js?v=20261014-remove-instructor"></script>
 </body>
 </html>

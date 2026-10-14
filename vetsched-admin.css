@@ -574,6 +574,12 @@ button{font-family:inherit;}
 }
 .field-row{display:flex;gap:12px;}
 .field-row .field{flex:1;}
+.instructor-select-row{display:flex;align-items:center;gap:8px;}
+.instructor-select-row select{flex:1;min-width:0;width:auto;}
+.instructor-remove-btn{flex:0 0 40px;width:40px;height:40px;border:1px solid #e7c3b6;border-radius:10px;background:var(--paper);color:var(--danger);font:600 1.25rem Inter,sans-serif;line-height:1;cursor:pointer;transition:background .12s ease,border-color .12s ease;}
+.instructor-remove-btn:hover:not(:disabled){border-color:var(--danger);background:#fdeee6;}
+.instructor-remove-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+.instructor-remove-btn:disabled{opacity:.45;cursor:not-allowed;}
 .day-picker{display:flex;gap:6px;flex-wrap:wrap;}
 .day-toggle{
   width:42px;height:36px;
