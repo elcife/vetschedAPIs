@@ -324,7 +324,7 @@ function renderSettingsMain(){
           <div class="settings-form-actions">
             <button class="btn-primary" id="changePasswordBtn">Update password</button>
           </div>
-          <div class="field-error" id="adminChangePasswordError" style="display:none;"></div>
+          <div class="field-error" id="adminChangePasswordError" style="display:none;" role="alert"></div>
           <div class="settings-success" id="adminChangePasswordSuccess"></div>
         </div>
       </section>
@@ -528,8 +528,8 @@ async function changeAdminPassword(){
       localStorage.setItem(REMEMBERED_ADMIN_KEY,JSON.stringify({user:currentAdminUsername,pass:newPassword}));
     }
     success.textContent = result.message || 'Password updated successfully.';
-  } catch (error) {
-    error.textContent = error.message || 'Could not update password.';
+  } catch (requestError) {
+    error.textContent = requestError.message || 'Could not update password.';
     error.style.display='block';
   }
 }
