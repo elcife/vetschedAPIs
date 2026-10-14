@@ -47,6 +47,8 @@ async function deleteRecord(key,id){
 /* ---------------- auth ---------------- */
 let currentAdmin=null;
 let currentAdminUsername='';
+let currentAdminPassword='';
+let currentAdminRole='admin';
 const REMEMBERED_ADMIN_KEY='vetschedRememberedAdmin';
 async function attemptLogin(){
   const user=document.getElementById('loginUser').value.trim();
@@ -80,6 +82,8 @@ async function attemptLogin(){
     }
 
     currentAdminUsername = result.admin?.username || user;
+    currentAdminPassword = pass;
+    currentAdminRole = result.admin?.role || 'admin';
     currentAdmin = result.admin?.display_name || currentAdminUsername;
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('appRoot').style.display='flex';
@@ -90,7 +94,7 @@ async function attemptLogin(){
     err.classList.add('show');
   }
 }
-function logout(){currentAdmin=null;currentAdminUsername='';document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';document.getElementById('rememberMe').checked=Boolean(localStorage.getItem(REMEMBERED_ADMIN_KEY));document.getElementById('loginError').classList.remove('show');document.getElementById('appRoot').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('loginUser').focus();}
+function logout(){currentAdmin=null;currentAdminUsername='';currentAdminPassword='';currentAdminRole='admin';document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';document.getElementById('rememberMe').checked=Boolean(localStorage.getItem(REMEMBERED_ADMIN_KEY));document.getElementById('loginError').classList.remove('show');document.getElementById('appRoot').style.display='none';document.getElementById('loginScreen').style.display='flex';document.getElementById('loginUser').focus();}
 function restoreRememberedLogin(){
   try {
     const saved=JSON.parse(localStorage.getItem(REMEMBERED_ADMIN_KEY)||'null');
@@ -316,6 +320,37 @@ function renderSettingsMain(){
         </div>
       </section>
 
+      ${currentAdminRole === 'super_admin' ? `
+      <section class="settings-card">
+        <div>
+          <h2>Admin accounts</h2>
+          <p>Create and remove admin accounts. Super-admin accounts cannot be removed here.</p>
+        </div>
+        <form class="settings-password-form" id="createAdminForm" autocomplete="off">
+          <div class="field">
+            <label for="newAdminUsername">Admin username</label>
+            <input type="text" id="newAdminUsername" maxlength="50" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="newAdminDisplayName">Admin display name</label>
+            <input type="text" id="newAdminDisplayName" maxlength="100" autocomplete="off" required>
+          </div>
+          <div class="field">
+            <label for="newManagedAdminPassword">Admin password</label>
+            <input type="password" id="newManagedAdminPassword" minlength="10" autocomplete="new-password" required>
+          </div>
+          <div class="settings-form-actions">
+            <button class="btn-primary" type="submit" id="createAdminBtn">Create admin account</button>
+          </div>
+          <div class="field-error" id="adminAccountError" style="display:none;" role="alert"></div>
+          <div class="settings-success" id="adminAccountSuccess" role="status"></div>
+        </form>
+        <div class="admin-accounts-list">
+          <h3>Existing admin accounts</h3>
+          <div id="adminAccounts" aria-live="polite">Loading admin accounts...</div>
+        </div>
+      </section>` : ''}
+
       <section class="settings-danger">
         <div>
           <h2>Set semester</h2>
@@ -327,6 +362,82 @@ function renderSettingsMain(){
   `;
   document.getElementById('changePasswordBtn').addEventListener('click', changeAdminPassword);
   document.getElementById('setSemesterBtn').addEventListener('click', setSemester);
+  if(currentAdminRole === 'super_admin'){
+    document.getElementById('createAdminForm').addEventListener('submit', createAdminAccount);
+    loadAdminAccounts();
+  }
+}
+async function requestAdminAccounts(action, fields={}){
+  const response=await fetch(`${API_URL}?resource=admin`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      action,
+      actorUsername:currentAdminUsername,
+      actorPassword:currentAdminPassword,
+      ...fields
+    })
+  });
+  const result=await response.json();
+  if(!response.ok||result.success!==true)throw new Error(result.message||'Admin account request failed.');
+  return result;
+}
+async function loadAdminAccounts(){
+  const container=document.getElementById('adminAccounts');
+  if(!container)return;
+  container.textContent='Loading admin accounts...';
+  try{
+    const result=await requestAdminAccounts('listAccounts');
+    if(!document.getElementById('adminAccounts'))return;
+    if(!result.accounts.length){
+      container.innerHTML='<p class="admin-accounts-empty">No admin accounts have been created.</p>';
+      return;
+    }
+    container.innerHTML=`<div class="admin-accounts-table"><div class="admin-accounts-row admin-accounts-heading"><span>Username</span><span>Display name</span><span>Action</span></div>${result.accounts.map(account=>`<div class="admin-accounts-row"><span>${escapeHtml(account.username)}</span><span>${escapeHtml(account.displayName)}</span><button type="button" class="admin-remove-btn" data-admin-id="${Number(account.id)}" data-admin-username="${escapeHtml(account.username)}">Remove</button></div>`).join('')}</div>`;
+    container.querySelectorAll('.admin-remove-btn').forEach(button=>button.addEventListener('click',()=>removeAdminAccount(button.dataset.adminId,button.dataset.adminUsername)));
+  }catch(error){
+    container.innerHTML=`<p class="admin-accounts-error">${escapeHtml(error.message||'Could not load admin accounts.')}</p><button type="button" class="btn-secondary" id="retryAdminAccountsBtn">Retry</button>`;
+    document.getElementById('retryAdminAccountsBtn')?.addEventListener('click',loadAdminAccounts);
+  }
+}
+async function createAdminAccount(event){
+  event.preventDefault();
+  const error=document.getElementById('adminAccountError');
+  const success=document.getElementById('adminAccountSuccess');
+  error.style.display='none';
+  success.textContent='';
+  const username=document.getElementById('newAdminUsername').value.trim();
+  const displayName=document.getElementById('newAdminDisplayName').value.trim();
+  const password=document.getElementById('newManagedAdminPassword').value;
+  if(!username||!displayName||!password){
+    error.textContent='Complete all admin account fields.';
+    error.style.display='block';
+    return;
+  }
+  if(password.length<10){
+    error.textContent='Admin password must be at least 10 characters.';
+    error.style.display='block';
+    return;
+  }
+  try{
+    const result=await requestAdminAccounts('createAccount',{username,displayName,password});
+    document.getElementById('createAdminForm').reset();
+    success.textContent=result.message||'Admin account created.';
+    await loadAdminAccounts();
+  }catch(requestError){
+    error.textContent=requestError.message||'Could not create admin account.';
+    error.style.display='block';
+  }
+}
+async function removeAdminAccount(adminId,username){
+  if(!confirm(`Remove admin account "${username}"? This cannot be undone.`))return;
+  try{
+    const result=await requestAdminAccounts('deleteAccount',{adminId:Number(adminId)});
+    showToast(result.message||'Admin account removed.');
+    await loadAdminAccounts();
+  }catch(error){
+    showToast(error.message||'Could not remove admin account.');
+  }
 }
 async function changeAdminPassword(){
   const currentPassword=document.getElementById('currentAdminPassword').value;
@@ -376,6 +487,10 @@ async function changeAdminPassword(){
     document.getElementById('currentAdminPassword').value='';
     document.getElementById('newAdminPassword').value='';
     document.getElementById('confirmAdminPassword').value='';
+    currentAdminPassword=newPassword;
+    if(localStorage.getItem(REMEMBERED_ADMIN_KEY)){
+      localStorage.setItem(REMEMBERED_ADMIN_KEY,JSON.stringify({user:currentAdminUsername,pass:newPassword}));
+    }
     success.textContent = result.message || 'Password updated successfully.';
   } catch (error) {
     error.textContent = error.message || 'Could not update password.';

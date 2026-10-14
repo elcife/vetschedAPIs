@@ -59,6 +59,27 @@ function requestData() {
     return is_array($body) ? $body : [];
 }
 
+function requireSuperAdmin(PDO $conn, array $data): array {
+    $username = trim((string) ($data['actorUsername'] ?? ''));
+    $password = (string) ($data['actorPassword'] ?? '');
+    if ($username === '' || $password === '') {
+        respond(['success' => false, 'message' => 'Super-admin credentials are required'], 401);
+    }
+
+    $stmt = $conn->prepare("SELECT admin_id, username, password_hash, role, is_active FROM admin_account WHERE LOWER(username) = LOWER(:username) LIMIT 1");
+    $stmt->execute([':username' => $username]);
+    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (
+        !$admin ||
+        !filter_var($admin['is_active'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
+        $admin['role'] !== 'super_admin' ||
+        !password_verify($password, $admin['password_hash'])
+    ) {
+        respond(['success' => false, 'message' => 'Super-admin authorization failed'], 403);
+    }
+    return $admin;
+}
+
 function getOrCreateInstructorId(PDO $conn, string $name): int {
     $cleanName = trim($name);
     if ($cleanName === '') {
@@ -260,7 +281,7 @@ try {
                 respond(['success' => false, 'message' => 'Username and password are required'], 400);
             }
 
-            $stmt = $conn->prepare('SELECT admin_id, username, password_hash, display_name, is_active FROM admin_account WHERE LOWER(username) = LOWER(:username) LIMIT 1');
+            $stmt = $conn->prepare('SELECT admin_id, username, password_hash, display_name, role, is_active FROM admin_account WHERE LOWER(username) = LOWER(:username) LIMIT 1');
             $stmt->execute([':username' => $username]);
             $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -306,6 +327,58 @@ try {
             $update->execute([':password_hash' => $newHash, ':admin_id' => (int) $admin['admin_id']]);
 
             respond(['success' => true, 'message' => 'Password updated successfully']);
+        }
+
+        if ($action === 'listAccounts') {
+            requireSuperAdmin($conn, $data);
+            $stmt = $conn->query("SELECT admin_id AS id, username, display_name AS \"displayName\", is_active AS \"isActive\", created_at AS \"createdAt\" FROM admin_account WHERE role = 'admin' ORDER BY LOWER(username), admin_id");
+            respond(['success' => true, 'accounts' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        }
+
+        if ($action === 'createAccount') {
+            requireSuperAdmin($conn, $data);
+            $username = trim((string) ($data['username'] ?? ''));
+            $displayName = trim((string) ($data['displayName'] ?? ''));
+            $password = (string) ($data['password'] ?? '');
+            if ($username === '' || $displayName === '' || $password === '') {
+                respond(['success' => false, 'message' => 'Username, display name, and password are required'], 400);
+            }
+            if (strlen($username) > 50 || strlen($displayName) > 100) {
+                respond(['success' => false, 'message' => 'Username must be at most 50 characters and display name at most 100 characters'], 400);
+            }
+            if (strlen($password) < 10) {
+                respond(['success' => false, 'message' => 'Admin password must be at least 10 characters'], 400);
+            }
+
+            $existing = $conn->prepare('SELECT 1 FROM admin_account WHERE LOWER(username) = LOWER(:username) LIMIT 1');
+            $existing->execute([':username' => $username]);
+            if ($existing->fetchColumn()) {
+                respond(['success' => false, 'message' => 'That username is already in use'], 409);
+            }
+
+            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+            $stmt = $conn->prepare("INSERT INTO admin_account (username, password_hash, display_name, role, is_active) VALUES (:username, :password_hash, :display_name, 'admin', TRUE) RETURNING admin_id");
+            $stmt->execute([
+                ':username' => $username,
+                ':password_hash' => $passwordHash,
+                ':display_name' => $displayName,
+            ]);
+            respond(['success' => true, 'id' => (int) $stmt->fetchColumn(), 'message' => 'Admin account created']);
+        }
+
+        if ($action === 'deleteAccount') {
+            requireSuperAdmin($conn, $data);
+            $adminId = $data['adminId'] ?? null;
+            if (!is_numeric($adminId)) {
+                respond(['success' => false, 'message' => 'A valid admin account ID is required'], 400);
+            }
+
+            $stmt = $conn->prepare("DELETE FROM admin_account WHERE admin_id = :admin_id AND role = 'admin'");
+            $stmt->execute([':admin_id' => (int) $adminId]);
+            if ($stmt->rowCount() === 0) {
+                respond(['success' => false, 'message' => 'Admin account not found'], 404);
+            }
+            respond(['success' => true, 'message' => 'Admin account removed']);
         }
 
         respond(['success' => false, 'message' => 'Unknown admin action'], 400);
