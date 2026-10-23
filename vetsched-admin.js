@@ -311,6 +311,40 @@ async function toggleStudentSchedule(studentId){
   }
   renderStudentsMain();
 }
+async function refreshStudents(){
+  const expandedStudentId=viewingStudentScheduleId;
+  const refreshButton=document.getElementById('refreshStudentsBtn');
+  if(refreshButton)refreshButton.disabled=true;
+  try{
+    students=await loadList('students');
+    studentSchedules={};
+    let scheduleRefreshFailed=false;
+    if(expandedStudentId){
+      const student=students.find(item=>String(item.id)===String(expandedStudentId));
+      if(student){
+        try{
+          const response=await fetch(`${API_URL}?resource=enrolled_courses&studentId=${encodeURIComponent(student.studentId)}`,{cache:'no-store'});
+          if(!response.ok)throw new Error('Could not refresh submitted schedule');
+          studentSchedules[expandedStudentId]=await response.json();
+          viewingStudentScheduleId=expandedStudentId;
+        }catch(error){
+          console.error('Student schedule refresh error',error);
+          studentSchedules[expandedStudentId]=[];
+          scheduleRefreshFailed=true;
+        }
+      }else{
+        viewingStudentScheduleId=null;
+      }
+    }
+    if(currentView==='students')renderStudentsMain();
+    showToast(scheduleRefreshFailed?'Students refreshed, but the submitted schedule could not be loaded':'Students refreshed');
+  }catch(error){
+    console.error('Student refresh error',error);
+    showToast(error.message||'Could not refresh students');
+  }finally{
+    document.getElementById('refreshStudentsBtn')?.removeAttribute('disabled');
+  }
+}
 function renderStudentsMain(){
   const el=document.getElementById('mainInner');
   const q=studentSearch.trim().toLowerCase();
@@ -321,7 +355,7 @@ function renderStudentsMain(){
     return `<div class="student-entry"><div class="student-row" data-id="${s.id}"><div class="student-info"><div class="student-avatar">${escapeHtml(initials(s.name||'?'))}</div><div><div class="student-name">${escapeHtml(s.name)}</div><div class="student-id">ID: ${escapeHtml(s.studentId)}${s.yearLevel?` · Year ${escapeHtml(s.yearLevel)}`:''}${s.semester?` · Semester ${escapeHtml(s.semester)}`:''}</div></div></div><div class="student-actions"><button class="view-schedule-btn" data-id="${s.id}">${expanded?'Hide schedule':'View schedule'}</button>${expanded&&hasSchedule?`<button class="return-schedule-btn" data-student-id="${encodeURIComponent(s.id)}">Return schedule</button>`:''}</div></div>${expanded?scheduleMarkup(studentSchedules[s.id]||[]):''}</div>`;
   }).join('');
   el.innerHTML=`<div class="students-header"><div><h1>Students</h1><p>View student accounts and their submitted schedules.</p></div><button class="btn-secondary students-refresh-btn" id="refreshStudentsBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"/><path d="M3 4v6h6"/><path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"/><path d="M21 20v-6h-6"/></svg>Refresh</button></div><div class="search-row"><div class="search-box"><input type="text" id="studentSearchInput" placeholder="Search by student ID or name" value="${escapeHtml(studentSearch)}"></div></div>${!students.length?'<div class="no-results"><h3>No students yet</h3><p>Students appear here after they register.</p></div>':!filtered.length?`<div class="no-results"><h3>No matches</h3><p>No student found for "${escapeHtml(studentSearch)}".</p></div>`:`<div class="students-table">${rows}</div>`}`;
-  document.getElementById('refreshStudentsBtn').addEventListener('click',()=>refreshFromDatabase(true));
+  document.getElementById('refreshStudentsBtn').addEventListener('click',refreshStudents);
   const input=document.getElementById('studentSearchInput');
   input.addEventListener('input',e=>{studentSearch=e.target.value;renderStudentsMain();const next=document.getElementById('studentSearchInput');next.focus();next.setSelectionRange(next.value.length,next.value.length);});
   el.querySelectorAll('.view-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>toggleStudentSchedule(btn.dataset.id)));
