@@ -81,6 +81,17 @@ try {
 
         $conn->beginTransaction();
         try {
+            $capacity = lockAndCheckOfferingCapacity($conn, $studentId, $offeringIds);
+            $offeringIds = $capacity['offeringIds'];
+            if ($capacity['unavailableIds'] !== []) {
+                $conn->rollBack();
+                respond([
+                    'success' => false,
+                    'message' => 'One or more selected sections are full. No enrollment changes were saved.',
+                    'offeringIds' => $capacity['unavailableIds'],
+                ], 409);
+            }
+
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
             $deleteStmt = $conn->prepare("DELETE FROM plotting WHERE student_id = ? AND offering_id IN ($placeholders)");
             $deleteStmt->execute(array_merge([$studentId], array_values($offeringIds)));
@@ -95,6 +106,9 @@ try {
             $stmt->execute($insertParams);
             $conn->commit();
             respond(['success' => true]);
+        } catch (InvalidArgumentException $e) {
+            if ($conn->inTransaction()) $conn->rollBack();
+            respond(['success' => false, 'message' => $e->getMessage()], 400);
         } catch (Exception $e) {
             $conn->rollBack();
             respond(['success' => false, 'message' => $e->getMessage()], 500);
