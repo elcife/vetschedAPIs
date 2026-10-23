@@ -103,6 +103,15 @@ try {
             respond(['success' => false, 'message' => 'Student ID and Offering IDs are required'], 400);
         }
 
+        $checkStmt = $conn->prepare('SELECT is_submitted FROM schedule_submission WHERE TRIM(student_id) = TRIM(:studentId) LIMIT 1');
+        $checkStmt->execute([':studentId' => $studentId]);
+        $subRow = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        $rawSub = $subRow['is_submitted'] ?? false;
+        $isSub = ($rawSub === true || $rawSub === 't' || $rawSub === '1' || $rawSub === 1 || $rawSub === 'true');
+        if ($isSub) {
+            respond(['success' => false, 'message' => 'Schedule is submitted and locked. You cannot modify enrollments until admin returns it.'], 403);
+        }
+
         $conn->beginTransaction();
         try {
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
@@ -134,6 +143,15 @@ try {
         $offeringIds = $data['offeringIds'] ?? [];
         if (!$studentId || empty($offeringIds)) {
             respond(['success' => false, 'message' => 'Student ID and Offering IDs are required'], 400);
+        }
+
+        $checkStmt = $conn->prepare('SELECT is_submitted FROM schedule_submission WHERE TRIM(student_id) = TRIM(:studentId) LIMIT 1');
+        $checkStmt->execute([':studentId' => $studentId]);
+        $subRow = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        $rawSub = $subRow['is_submitted'] ?? false;
+        $isSub = ($rawSub === true || $rawSub === 't' || $rawSub === '1' || $rawSub === 1 || $rawSub === 'true');
+        if ($isSub) {
+            respond(['success' => false, 'message' => 'Schedule is submitted and locked. You cannot modify enrollments until admin returns it.'], 403);
         }
 
         $conn->beginTransaction();
@@ -191,6 +209,16 @@ try {
         if ($studentId === '') {
             respond(['success' => false, 'message' => 'Student ID is required'], 400);
         }
+
+        $checkStmt = $conn->prepare('SELECT is_submitted FROM schedule_submission WHERE TRIM(student_id) = TRIM(:studentId) LIMIT 1');
+        $checkStmt->execute([':studentId' => $studentId]);
+        $subRow = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        $rawSub = $subRow['is_submitted'] ?? false;
+        $isSub = ($rawSub === true || $rawSub === 't' || $rawSub === '1' || $rawSub === 1 || $rawSub === 'true');
+        if ($isSub) {
+            respond(['success' => false, 'message' => 'Schedule is submitted and locked. You cannot modify enrollments until admin returns it.'], 403);
+        }
+
         $conn->beginTransaction();
 
         $stmt = $conn->prepare("DELETE FROM plotting WHERE TRIM(student_id) = TRIM(:studentId)");
