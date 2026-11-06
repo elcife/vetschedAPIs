@@ -376,6 +376,8 @@ function renderStudentsMain(){
 const renderSidebarBase=renderSidebar;
 renderSidebar=function(){renderSidebarBase();document.getElementById('navSettings').classList.toggle('active',currentView==='settings');if(currentView==='settings')document.getElementById('sidebarBody').innerHTML='<div class="sidebar-note">Manage semester-wide admin actions here.</div>';};
 function renderSettingsMain(){
+  const semesterValues=[...new Set(students.map(student=>Number(student.semester)).filter(semester=>[1,2].includes(semester)))];
+  const currentSemesterLabel=semesterValues.length===1?`Semester ${semesterValues[0]}`:semesterValues.length>1?'Different semesters':'Not set';
   document.getElementById('mainInner').innerHTML = `
     <div class="settings-page">
       <div class="settings-header">
@@ -454,10 +456,11 @@ function renderSettingsMain(){
 
       <section class="settings-danger">
         <div>
-          <h2>Set semester</h2>
-          <p>Set the semester for every student. This clears all submitted schedules so students can enroll for the selected semester.</p>
+          <h2>End semester</h2>
+          <div class="current-semester-label">Currently set to: <strong>${currentSemesterLabel}</strong></div>
+          <p>Return all submitted schedules, clear every student schedule, and set the semester for every student.</p>
         </div>
-        <button class="danger-action-btn" id="setSemesterBtn">Set semester</button>
+        <button class="danger-action-btn" id="setSemesterBtn">End semester</button>
       </section>
     </div>
   `;
@@ -683,11 +686,11 @@ function closeStudentModal(){document.getElementById('studentOverlay').classList
 async function saveStudent(){const studentId=document.getElementById('studentId').value.trim(),name=document.getElementById('studentName').value.trim();let valid=true;document.getElementById('studentIdError').style.display=studentId?'none':(valid=false,'block');document.getElementById('studentNameError').style.display=name?'none':(valid=false,'block');if(!valid)return;const dupe=students.find(s=>s.studentId.toLowerCase()===studentId.toLowerCase()&&s.id!==editingStudentId);if(dupe){document.getElementById('studentIdError').textContent='That student ID is already in use.';document.getElementById('studentIdError').style.display='block';return;}document.getElementById('studentIdError').textContent='Give the student an ID.';if(editingStudentId){const s=students.find(x=>x.id===editingStudentId);s.studentId=studentId;s.name=name;showToast('Student updated');}else{students.push({id:uid(),studentId,name});showToast('Student added');}await saveList('students',students);closeStudentModal();renderAll();}
 async function deleteStudent(id){const s=students.find(x=>x.id===id);if(!s||!confirm(`Delete "${s.name}"? This can't be undone.`))return;students=students.filter(x=>x.id!==id);await saveList('students',students);showToast('Student deleted');renderAll();}
 async function setSemester(){
-  const selection=prompt('Set the semester for all students. Enter 1 for Semester 1 or 2 for Semester 2.');
+  const selection=prompt('End the current semester and set the next semester for all students. Enter 1 for Semester 1 or 2 for Semester 2.');
   if(selection===null)return;
   const semester=Number(selection.trim());
   if(![1,2].includes(semester)){showToast('Enter 1 for Semester 1 or 2 for Semester 2');return;}
-  if(!confirm(`Set every student to Semester ${semester}? This clears all submitted schedules.`))return;
+  if(!confirm(`End the current semester and set every student to Semester ${semester}? This returns all submitted schedules and clears all student schedules.`))return;
   try{
     const response=await fetch(`${API_URL}?resource=students`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'setSemester',semester})});
     const result=await response.json();
@@ -695,7 +698,7 @@ async function setSemester(){
     students=students.map(student=>({...student,semester}));
     studentSchedules={};
     viewingStudentScheduleId=null;
-    showToast(`Semester ${semester} set for all students; submitted schedules cleared`);
+    showToast(`Semester ${semester} set; schedules returned and cleared`);
     renderAll();
   }catch(error){console.error('Set semester error',error);showToast(error.message||'Could not set semester');}
 }

@@ -521,10 +521,18 @@ try {
         $conn->beginTransaction();
         $clearSchedules = $conn->prepare('DELETE FROM plotting');
         $clearSchedules->execute();
+        $returnSchedules = $conn->prepare('UPDATE schedule_submission SET is_submitted = FALSE, submitted_at = NULL');
+        $returnSchedules->execute();
         $stmt = $conn->prepare('UPDATE account SET semester = :semester');
         $stmt->execute([':semester' => $semester]);
         $conn->commit();
-        respond(['success' => true, 'semester' => $semester, 'updated' => $stmt->rowCount()]);
+        respond([
+            'success' => true,
+            'semester' => $semester,
+            'updated' => $stmt->rowCount(),
+            'clearedSchedules' => $clearSchedules->rowCount(),
+            'returnedSchedules' => $returnSchedules->rowCount(),
+        ]);
     }
 
     if ($resource === 'sections' && array_key_exists('classes', $data)) {
