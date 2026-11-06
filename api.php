@@ -12,10 +12,8 @@ require_once __DIR__ . '/db.php';
 
 function parsePgArray($pgArray) {
     if (!$pgArray || $pgArray === '{}') return [];
-    // Remove braces and split by comma
     $clean = trim($pgArray, '{}');
     if ($clean === '') return [];
-    // Handle quoted strings in array if any, though likely simple days
     return str_getcsv($clean, ',', '"');
 }
 
@@ -50,7 +48,6 @@ function groupSectionSlots(array $allSlots): array {
             }
         }
     }
-
     return [array_values($classes), array_values(array_unique($allOfferingIds))];
 }
 
@@ -63,13 +60,11 @@ function timeToMinutes(string $value): ?int {
     if (!preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', trim($value), $matches)) {
         return null;
     }
-
     $hours = (int) $matches[1];
     $minutes = (int) $matches[2];
     if ($hours < 0 || $hours > 23 || $minutes < 0 || $minutes > 59) {
         return null;
     }
-
     return ($hours * 60) + $minutes;
 }
 
@@ -93,7 +88,6 @@ function lockUniqueName(PDO $conn, string $namespace, string $name, ?int $parent
         $stmt->execute([':namespace' => $namespace, ':name' => $name]);
         return;
     }
-
     $stmt = $conn->prepare("SELECT pg_advisory_xact_lock(hashtext(:namespace || CAST(:parent_id AS TEXT) || ':' || LOWER(TRIM(:name))))");
     $stmt->execute([':namespace' => $namespace, ':parent_id' => $parentId, ':name' => $name]);
 }
@@ -111,16 +105,10 @@ function requireSuperAdmin(PDO $conn, array $data): array {
     if ($username === '' || $password === '') {
         respond(['success' => false, 'message' => 'Super-admin credentials are required'], 401);
     }
-
     $stmt = $conn->prepare("SELECT admin_id, username, password_hash, role, is_active FROM admin_account WHERE LOWER(username) = LOWER(:username) LIMIT 1");
     $stmt->execute([':username' => $username]);
     $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (
-        !$admin ||
-        !filter_var($admin['is_active'] ?? false, FILTER_VALIDATE_BOOLEAN) ||
-        $admin['role'] !== 'super_admin' ||
-        !password_verify($password, $admin['password_hash'])
-    ) {
+    if (!$admin || !filter_var($admin['is_active'] ?? false, FILTER_VALIDATE_BOOLEAN) || $admin['role'] !== 'super_admin' || !password_verify($password, $admin['password_hash'])) {
         respond(['success' => false, 'message' => 'Super-admin authorization failed'], 403);
     }
     return $admin;
@@ -131,17 +119,38 @@ function getOrCreateInstructorId(PDO $conn, string $name): int {
     if ($cleanName === '') {
         throw new InvalidArgumentException('Instructor name cannot be empty');
     }
-
     $stmt = $conn->prepare('SELECT instructor_id FROM instructor WHERE LOWER(TRIM(instructor_name)) = LOWER(TRIM(:name)) LIMIT 1');
     $stmt->execute([':name' => $cleanName]);
     $id = $stmt->fetchColumn();
     if ($id !== false && $id !== null) {
         return (int) $id;
     }
-
     $insert = $conn->prepare('INSERT INTO instructor (instructor_name) VALUES (:name) RETURNING instructor_id');
     $insert->execute([':name' => $cleanName]);
     return (int) $insert->fetchColumn();
+}
+
+function getActiveSemester(PDO $conn): int {
+    $semester = $_GET['semester'] ?? $_GET['sem'] ?? null;
+    if ($semester !== null && $semester !== '' && in_array((int)$semester, [1, 2], true)) {
+        return (int)$semester;
+    }
+    try {
+        $conn->exec('CREATE TABLE IF NOT EXISTS system_settings (key VARCHAR(50) PRIMARY KEY, value VARCHAR(255))');
+        $stmt = $conn->query("SELECT value FROM system_settings WHERE key = 'active_semester' LIMIT 1");
+        $val = $stmt->fetchColumn();
+        if ($val !== false && $val !== null && in_array((int)$val, [1, 2], true)) {
+            return (int)$val;
+        }
+    } catch (Exception $e) {}
+    try {
+        $semStmt = $conn->query('SELECT semester FROM account WHERE semester IS NOT NULL LIMIT 1');
+        $accountSem = $semStmt->fetchColumn();
+        if ($accountSem !== false && $accountSem !== null && in_array((int)$accountSem, [1, 2], true)) {
+            return (int)$accountSem;
+        }
+    } catch (Exception $e) {}
+    return 1;
 }
 
 $resource = $_GET['resource'] ?? '';
@@ -149,17 +158,22 @@ $resource = $_GET['resource'] ?? '';
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($resource === 'subjects') {
-            $rows = $conn->query('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject ORDER BY year_level, semester, subject_id')->fetchAll(PDO::FETCH_ASSOC);
+            $semester = getActiveSemester($conn);
+            $stmt = $conn->prepare('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject WHERE semester = :semester ORDER BY year_level, semester, subject_id');
+            $stmt->execute([':semester' => (int)$semester]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             respond($rows);
         }
 
         if ($resource === 'sections') {
+            $semester = getActiveSemester($conn);
             $sql = "SELECT s.section_id AS id, s.section_name AS type,
                            s.is_open AS \"isOpen\",
                            s.subject_id AS \"subjectId\",
                            s.max_capacity AS \"maxCapacity\",
-                                    COUNT(DISTINCT ss.student_id) AS \"enrollmentCount\"
+                           COUNT(DISTINCT ss.student_id) AS \"enrollmentCount\"
                     FROM section s
+                    JOIN subject sub ON sub.subject_id = s.subject_id AND sub.semester = :semester
                     LEFT JOIN (
                         SELECT section_id, offering_id FROM offering WHERE section_id IS NOT NULL
                         UNION
@@ -172,7 +186,9 @@ try {
                         ON TRIM(ss.student_id) = TRIM(p.student_id) AND ss.is_submitted = TRUE
                     GROUP BY s.section_id, s.section_name, s.is_open, s.subject_id, s.max_capacity
                     ORDER BY s.section_id";
-            $rows = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+            $stmt = $conn->prepare($sql);
+            $stmt->execute([':semester' => (int)$semester]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             $classSql = "SELECT sc.section_id,
                                o.class_type AS \"classType\", sc.day_of_the_week AS day,
@@ -183,11 +199,14 @@ try {
                         FROM schedule sc
                         JOIN offering o ON o.schedule_id = sc.schedule_id
                             AND (o.section_id = sc.section_id OR o.section_id IS NULL)
+                        JOIN subject sub ON sub.subject_id = o.subject_id AND sub.semester = :semester2
                         LEFT JOIN instructor i ON i.instructor_id = o.instructor_id
                         LEFT JOIN room r ON r.room_id = o.room_id
                         WHERE sc.section_id IS NOT NULL";
+            $slotStmt = $conn->prepare($classSql);
+            $slotStmt->execute([':semester2' => (int)$semester]);
             $slotsBySection = [];
-            foreach ($conn->query($classSql)->fetchAll(PDO::FETCH_ASSOC) as $slot) {
+            foreach ($slotStmt->fetchAll(PDO::FETCH_ASSOC) as $slot) {
                 $slotsBySection[(int) $slot['section_id']][] = $slot;
             }
 
@@ -225,7 +244,6 @@ try {
             if (!$studentId) {
                 respond(['success' => false, 'message' => 'Student ID required'], 400);
             }
-
             $sql = "SELECT DISTINCT sub.subject_code AS \"courseCode\", sub.subject_name AS \"courseName\",
                            COALESCE(s_schedule.section_name, s_offering.section_name) AS section,
                            sc.day_of_the_week AS day,
@@ -245,7 +263,6 @@ try {
                     LEFT JOIN room r ON r.room_id = o.room_id
                     WHERE TRIM(p.student_id) = TRIM(:studentId)
                     ORDER BY 5";
-
             $stmt = $conn->prepare($sql);
             $stmt->execute([':studentId' => $studentId]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -265,6 +282,44 @@ try {
     }
 
     $data = requestData();
+
+    // Universal semester update & end semester catcher
+    $postedSem = $data['semester'] ?? $data['sem'] ?? $_POST['semester'] ?? $_POST['sem'] ?? null;
+    $action = $data['action'] ?? $_POST['action'] ?? '';
+    if (($postedSem !== null && $postedSem !== '') || in_array($action, ['setSemester', 'endSemester', 'set_semester', 'end_semester'], true)) {
+        if ($postedSem !== null && $postedSem !== '') {
+            $semester = (int) $postedSem;
+        } else {
+            $currentSem = getActiveSemester($conn);
+            $semester = ($currentSem === 1) ? 2 : 1;
+        }
+        if (!in_array($semester, [1, 2], true)) {
+            $semester = 1;
+        }
+
+        $conn->beginTransaction();
+        $clearSchedules = $conn->prepare('DELETE FROM plotting');
+        $clearSchedules->execute();
+        $returnSchedules = $conn->prepare('UPDATE schedule_submission SET is_submitted = FALSE, submitted_at = NULL');
+        $returnSchedules->execute();
+
+        $conn->exec('CREATE TABLE IF NOT EXISTS system_settings (key VARCHAR(50) PRIMARY KEY, value VARCHAR(255))');
+        $stmtSet = $conn->prepare('INSERT INTO system_settings (key, value) VALUES (\'active_semester\', :semester) ON CONFLICT (key) DO UPDATE SET value = :semester');
+        $stmtSet->execute([':semester' => (string)$semester]);
+
+        $stmtAcc = $conn->prepare('UPDATE account SET semester = :semester');
+        $stmtAcc->execute([':semester' => $semester]);
+
+        $conn->commit();
+        respond([
+            'success' => true,
+            'semester' => $semester,
+            'updated' => $stmtAcc->rowCount(),
+            'clearedSchedules' => $clearSchedules->rowCount(),
+            'returnedSchedules' => $returnSchedules->rowCount(),
+        ]);
+    }
+
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         respond(['success' => false, 'message' => 'POST required'], 405);
     }
