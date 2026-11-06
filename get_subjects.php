@@ -32,6 +32,7 @@ function parsePgArray($value) {
 
 $yearLevel = $_GET['year_level'] ?? $_POST['year_level'] ?? null;
 $semester = $_GET['semester'] ?? $_POST['semester'] ?? null;
+$studentId = $_GET['student_id'] ?? $_GET['studentId'] ?? $_POST['student_id'] ?? $_POST['studentId'] ?? null;
 if ($yearLevel !== null && $yearLevel !== '') {
     $yearLevel = (int) $yearLevel;
 }
@@ -40,6 +41,30 @@ if ($semester !== null && $semester !== '') {
 }
 
 try {
+    if ($studentId !== null && trim((string) $studentId) !== '') {
+        $studentStmt = $conn->prepare('SELECT semester FROM account WHERE TRIM(student_id) = TRIM(:student_id) LIMIT 1');
+        $studentStmt->execute([':student_id' => trim((string) $studentId)]);
+        $accountSemester = $studentStmt->fetchColumn();
+        if ($accountSemester === false) {
+            http_response_code(404);
+            echo json_encode([
+                'success' => false,
+                'message' => 'Student account not found.',
+            ]);
+            exit;
+        }
+        $semester = (int) $accountSemester;
+    }
+
+    if ($semester !== null && !in_array($semester, [1, 2], true)) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Semester must be 1 or 2.',
+        ]);
+        exit;
+    }
+
     $subjectSql = "
         SELECT subject_id AS id,
                subject_code AS code,
