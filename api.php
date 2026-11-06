@@ -149,7 +149,15 @@ $resource = $_GET['resource'] ?? '';
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($resource === 'subjects') {
-            $rows = $conn->query('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject ORDER BY year_level, semester, subject_id')->fetchAll(PDO::FETCH_ASSOC);
+            $semesterStmt = $conn->query('SELECT semester FROM account WHERE semester IS NOT NULL LIMIT 1');
+            $semester = (int) ($semesterStmt->fetchColumn() ?: 1);
+            if (!in_array($semester, [1, 2], true)) {
+                $semester = 1;
+            }
+            header('X-Active-Semester: ' . $semester);
+            $stmt = $conn->prepare('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject WHERE semester = :semester ORDER BY year_level, semester, subject_id');
+            $stmt->execute([':semester' => $semester]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             respond($rows);
         }
 
