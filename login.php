@@ -12,7 +12,7 @@ if (empty($data["email"]) || empty($data["password"])) {
 
 try {
     // First, find the user by email
-    $sql = "SELECT student_id, first_name, last_name, email, password_hash, year_level FROM account
+    $sql = "SELECT student_id, first_name, last_name, email, password_hash, year_level, semester FROM account
             WHERE email = :email";
 
     $stmt = $conn->prepare($sql);
