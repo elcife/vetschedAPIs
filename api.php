@@ -68,20 +68,6 @@ function timeToMinutes(string $value): ?int {
     return ($hours * 60) + $minutes;
 }
 
-function timesOverlap(string $firstStart, string $firstEnd, string $secondStart, string $secondEnd): bool {
-    $firstStartMinutes = timeToMinutes($firstStart);
-    $firstEndMinutes = timeToMinutes($firstEnd);
-    $secondStartMinutes = timeToMinutes($secondStart);
-    $secondEndMinutes = timeToMinutes($secondEnd);
-
-    return $firstStartMinutes !== null
-        && $firstEndMinutes !== null
-        && $secondStartMinutes !== null
-        && $secondEndMinutes !== null
-        && $firstStartMinutes < $secondEndMinutes
-        && $secondStartMinutes < $firstEndMinutes;
-}
-
 function lockUniqueName(PDO $conn, string $namespace, string $name, ?int $parentId = null): void {
     if ($parentId === null) {
         $stmt = $conn->prepare("SELECT pg_advisory_xact_lock(hashtext(:namespace || LOWER(TRIM(:name))))");
@@ -636,21 +622,10 @@ try {
         if (!is_numeric($subjectId) || $sectionName === '' || $capacity < 1) {
             respond(['success' => false, 'message' => 'Section name, subject, and capacity are required'], 400);
         }
-        foreach ($classes as $classIndex => $class) {
+        foreach ($classes as $class) {
             $classDays = is_array($class['days'] ?? null) ? $class['days'] : [];
-            $classStart = (string) ($class['start'] ?? '');
-            $classEnd = (string) ($class['end'] ?? '');
             if (count($classDays) !== 1) {
                 respond(['success' => false, 'message' => 'Each class must have exactly one day'], 400);
-            }
-            foreach (array_slice($classes, $classIndex + 1) as $otherClass) {
-                $otherDays = is_array($otherClass['days'] ?? null) ? $otherClass['days'] : [];
-                $otherStart = (string) ($otherClass['start'] ?? '');
-                $otherEnd = (string) ($otherClass['end'] ?? '');
-                $sameDay = array_intersect($classDays, $otherDays);
-                if ($sameDay && timesOverlap($classStart, $classEnd, $otherStart, $otherEnd)) {
-                    respond(['success' => false, 'message' => 'Schedule conflict: two classes in this section overlap on ' . implode(', ', $sameDay)], 409);
-                }
             }
         }
 

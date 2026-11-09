@@ -530,21 +530,6 @@ button{font-family:inherit;}
   box-shadow:0 24px 70px rgba(0,0,0,0.3);
   border-top:4px solid var(--forest);
 }
-.modal.schedule-conflict{
-  border:2px solid var(--danger);
-  border-top:4px solid var(--danger);
-  animation:refuseSchedule .45s ease both;
-}
-.modal.schedule-conflict .btn-primary{
-  background:var(--danger);
-}
-@keyframes refuseSchedule{
-  0%,100%{transform:translateX(0);}
-  20%{transform:translateX(-10px);}
-  40%{transform:translateX(8px);}
-  60%{transform:translateX(-6px);}
-  80%{transform:translateX(4px);}
-}
 .modal h3{margin:0 0 20px 0;font-size:1.3rem;}
 .field{margin-bottom:16px;}
 .field label{
