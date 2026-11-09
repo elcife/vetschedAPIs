@@ -591,6 +591,43 @@ try {
         ]);
     }
 
+    if ($resource === 'sections' && ($data['action'] ?? '') === 'updateDetails') {
+        $sectionId = $data['id'] ?? null;
+        $subjectId = $data['subjectId'] ?? $data['subject_id'] ?? null;
+        $sectionName = trim((string) ($data['type'] ?? ''));
+        $capacity = filter_var($data['maxCapacity'] ?? null, FILTER_VALIDATE_INT);
+        if (!is_numeric($sectionId) || (int) $sectionId < 1 ||
+            !is_numeric($subjectId) || (int) $subjectId < 1 ||
+            $sectionName === '' || strlen($sectionName) > 50 ||
+            $capacity === false || $capacity < 1) {
+            respond(['success' => false, 'message' => 'A valid section, subject, name, and capacity are required'], 400);
+        }
+
+        $conn->beginTransaction();
+        $sectionId = (int) $sectionId;
+        $subjectId = (int) $subjectId;
+        $sectionStmt = $conn->prepare('SELECT section_id FROM section WHERE section_id = :id FOR UPDATE');
+        $sectionStmt->execute([':id' => $sectionId]);
+        if ($sectionStmt->fetchColumn() === false) {
+            $conn->rollBack();
+            respond(['success' => false, 'message' => 'Section not found'], 404);
+        }
+
+        lockUniqueName($conn, 'section-name:', $sectionName, $subjectId);
+        $duplicateStmt = $conn->prepare('SELECT 1 FROM section WHERE subject_id = :subject AND LOWER(TRIM(section_name)) = LOWER(TRIM(:name)) AND section_id <> :id LIMIT 1');
+        $duplicateStmt->execute([':subject' => $subjectId, ':name' => $sectionName, ':id' => $sectionId]);
+        if ($duplicateStmt->fetchColumn()) {
+            rejectDuplicateName($conn, 'A section with this name already exists for this subject');
+        }
+
+        $updateStmt = $conn->prepare('UPDATE section SET section_name = :name, subject_id = :subject, max_capacity = :capacity WHERE section_id = :id');
+        $updateStmt->execute([':name' => $sectionName, ':subject' => $subjectId, ':capacity' => $capacity, ':id' => $sectionId]);
+        $offeringStmt = $conn->prepare('UPDATE offering SET subject_id = :subject, max_capacity = :capacity WHERE section_id = :section_direct OR schedule_id IN (SELECT schedule_id FROM schedule WHERE section_id = :section_schedule)');
+        $offeringStmt->execute([':subject' => $subjectId, ':capacity' => $capacity, ':section_direct' => $sectionId, ':section_schedule' => $sectionId]);
+        $conn->commit();
+        respond(['success' => true, 'id' => $sectionId]);
+    }
+
     if ($resource === 'sections' && array_key_exists('classes', $data)) {
         $subjectId = $data['subjectId'] ?? $data['subject_id'] ?? null;
         $sectionName = trim((string) ($data['type'] ?? ''));
