@@ -283,10 +283,11 @@ try {
 
     $data = requestData();
 
-    // Universal semester update & end semester catcher
+    // Subject payloads contain a semester, so don't treat them as global semester changes.
     $postedSem = $data['semester'] ?? $data['sem'] ?? $_POST['semester'] ?? $_POST['sem'] ?? null;
     $action = $data['action'] ?? $_POST['action'] ?? '';
-    if (($postedSem !== null && $postedSem !== '') || in_array($action, ['setSemester', 'endSemester', 'set_semester', 'end_semester'], true)) {
+    if (($resource !== 'subjects' && $postedSem !== null && $postedSem !== '') ||
+        in_array($action, ['setSemester', 'endSemester', 'set_semester', 'end_semester'], true)) {
         if ($postedSem !== null && $postedSem !== '') {
             $semester = (int) $postedSem;
         } else {
