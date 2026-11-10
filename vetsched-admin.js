@@ -375,9 +375,19 @@ function renderStudentsMain(){
 }
 const renderSidebarBase=renderSidebar;
 renderSidebar=function(){renderSidebarBase();document.getElementById('navSettings').classList.toggle('active',currentView==='settings');if(currentView==='settings')document.getElementById('sidebarBody').innerHTML='<div class="sidebar-note">Manage semester-wide admin actions here.</div>';};
+let clearSubjectScheduleTimer=null;
+let clearSubjectScheduleId=null;
 function renderSettingsMain(){
   const semesterValues=[...new Set(students.map(student=>Number(student.semester)).filter(semester=>[1,2].includes(semester)))];
   const currentSemesterLabel=semesterValues.length===1?`Semester ${semesterValues[0]}`:semesterValues.length>1?'Different semesters':'Not set';
+  const subjectOptions=subjects.map(subject=>{
+    const subjectId=String(subject.id);
+    const yearLevel=subject.yearLevel||subject.year_level||'';
+    const semester=subject.semester||'';
+    const details=[yearLevel?`Year ${yearLevel}`:'',semester?`Semester ${semester}`:''].filter(Boolean).join(', ');
+    const label=`${subject.code||''}${subject.code?' — ':''}${subject.name||'Subject'}${details?` (${details})`:''}`;
+    return `<option value="${escapeHtml(subjectId)}">${escapeHtml(label)}</option>`;
+  }).join('');
   document.getElementById('mainInner').innerHTML = `
     <div class="settings-page">
       <div class="settings-header">
@@ -454,6 +464,23 @@ function renderSettingsMain(){
         </div>
       </section>` : ''}
 
+      <section class="settings-card settings-clear-schedules">
+        <div>
+          <h2>Clear all schedules for a subject</h2>
+          <p>Removes the selected subject's classes, days, times, room assignments, and student plots. The subject, its year and semester, sections, and teacher records are kept. Sections for this subject will be closed.</p>
+        </div>
+        <div class="field settings-clear-subject-field">
+          <label for="clearSubjectScheduleSelect">Subject</label>
+          <select id="clearSubjectScheduleSelect" ${subjects.length?'':'disabled'}>
+            <option value="">${subjects.length?'Select a subject':'No subjects available'}</option>
+            ${subjectOptions}
+          </select>
+        </div>
+        <div class="settings-form-actions">
+          <button type="button" class="danger-action-btn" id="clearSubjectScheduleBtn" ${subjects.length?'disabled':''}>Clear all schedules</button>
+        </div>
+      </section>
+
       <section class="settings-danger">
         <div>
           <h2>End semester</h2>
@@ -463,14 +490,125 @@ function renderSettingsMain(){
         <button class="danger-action-btn" id="setSemesterBtn">End semester</button>
       </section>
     </div>
+    <div class="overlay" id="clearSubjectScheduleOverlay">
+      <div class="modal instructor-confirm-modal clear-schedule-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="clearSubjectScheduleTitle">
+        <h3 id="clearSubjectScheduleTitle">Clear subject schedules?</h3>
+        <div id="clearSubjectScheduleFirstWarning">
+          <p id="clearSubjectScheduleWarning"></p>
+          <p class="clear-schedule-countdown" id="clearSubjectScheduleCountdown" role="status" aria-live="polite"></p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelClearSubjectSchedule">Cancel</button>
+            <button type="button" class="danger-action-btn" id="continueClearSubjectSchedule" disabled>Wait 5 seconds...</button>
+          </div>
+        </div>
+        <div id="clearSubjectScheduleFinalWarning" style="display:none;">
+          <p id="clearSubjectScheduleFinalMessage"></p>
+          <label class="clear-schedule-checkbox"><input type="checkbox" id="confirmClearSubjectSchedule"> I understand this will permanently remove this subject's class schedule and student plots.</label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" id="cancelFinalClearSubjectSchedule">Cancel</button>
+            <button type="button" class="danger-action-btn" id="confirmClearSubjectScheduleBtn" disabled>Clear schedules</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `;
   document.getElementById('changePasswordBtn').addEventListener('click', changeAdminPassword);
   document.querySelectorAll('[data-password-target]').forEach(toggle=>toggle.addEventListener('click',()=>togglePasswordVisibility(toggle)));
   document.getElementById('setSemesterBtn').addEventListener('click', setSemester);
+  const clearSubjectSelect=document.getElementById('clearSubjectScheduleSelect');
+  const clearSubjectButton=document.getElementById('clearSubjectScheduleBtn');
+  clearSubjectSelect.addEventListener('change',()=>{clearSubjectButton.disabled=!clearSubjectSelect.value;});
+  clearSubjectButton.addEventListener('click',openClearSubjectScheduleConfirmation);
+  document.getElementById('cancelClearSubjectSchedule').addEventListener('click',closeClearSubjectScheduleConfirmation);
+  document.getElementById('cancelFinalClearSubjectSchedule').addEventListener('click',closeClearSubjectScheduleConfirmation);
+  document.getElementById('continueClearSubjectSchedule').addEventListener('click',showFinalClearSubjectScheduleWarning);
+  document.getElementById('confirmClearSubjectSchedule').addEventListener('change',event=>{
+    document.getElementById('confirmClearSubjectScheduleBtn').disabled=!event.currentTarget.checked;
+  });
+  document.getElementById('confirmClearSubjectScheduleBtn').addEventListener('click',clearSubjectSchedules);
+  document.getElementById('clearSubjectScheduleOverlay').addEventListener('click',event=>{
+    if(event.target===event.currentTarget)closeClearSubjectScheduleConfirmation();
+  });
   if(currentAdminRole === 'super_admin'){
     document.getElementById('createAdminForm').addEventListener('submit', createAdminAccount);
     document.getElementById('newAdminPasswordToggle').addEventListener('click',toggleNewAdminPassword);
     loadAdminAccounts();
+  }
+}
+function closeClearSubjectScheduleConfirmation(){
+  if(clearSubjectScheduleTimer!==null){
+    clearInterval(clearSubjectScheduleTimer);
+    clearSubjectScheduleTimer=null;
+  }
+  clearSubjectScheduleId=null;
+  document.getElementById('clearSubjectScheduleOverlay')?.classList.remove('open');
+}
+function openClearSubjectScheduleConfirmation(){
+  const subjectId=document.getElementById('clearSubjectScheduleSelect').value;
+  const subject=subjects.find(item=>String(item.id)===String(subjectId));
+  if(!subject){
+    showToast('Select a subject first.');
+    return;
+  }
+  clearSubjectScheduleId=String(subject.id);
+  const label=`${subject.code||''}${subject.code?' — ':''}${subject.name||'Subject'}`;
+  document.getElementById('clearSubjectScheduleWarning').textContent=`Warning 1 of 2: This will remove every class, day, time, room assignment, and student plot for ${label}. The subject, year, semester, sections, and teacher records will remain.`;
+  document.getElementById('clearSubjectScheduleFinalMessage').textContent=`Warning 2 of 2: Confirm only if you want to permanently clear all schedule data for ${label}.`;
+  document.getElementById('clearSubjectScheduleFirstWarning').style.display='';
+  document.getElementById('clearSubjectScheduleFinalWarning').style.display='none';
+  document.getElementById('confirmClearSubjectSchedule').checked=false;
+  document.getElementById('confirmClearSubjectScheduleBtn').disabled=true;
+  const continueButton=document.getElementById('continueClearSubjectSchedule');
+  const countdown=document.getElementById('clearSubjectScheduleCountdown');
+  let secondsRemaining=5;
+  continueButton.disabled=true;
+  continueButton.textContent=`Wait ${secondsRemaining} seconds...`;
+  countdown.textContent='Review the warning. You can continue when the timer ends.';
+  document.getElementById('clearSubjectScheduleOverlay').classList.add('open');
+  clearSubjectScheduleTimer=setInterval(()=>{
+    secondsRemaining-=1;
+    if(secondsRemaining<=0){
+      clearInterval(clearSubjectScheduleTimer);
+      clearSubjectScheduleTimer=null;
+      continueButton.disabled=false;
+      continueButton.textContent='Continue to final warning';
+      countdown.textContent='Timer complete. Continue to the final confirmation.';
+      return;
+    }
+    continueButton.textContent=`Wait ${secondsRemaining} seconds...`;
+  },1000);
+}
+function showFinalClearSubjectScheduleWarning(){
+  if(!clearSubjectScheduleId||clearSubjectScheduleTimer!==null)return;
+  document.getElementById('clearSubjectScheduleFirstWarning').style.display='none';
+  document.getElementById('clearSubjectScheduleFinalWarning').style.display='';
+}
+async function clearSubjectSchedules(){
+  if(!clearSubjectScheduleId||!document.getElementById('confirmClearSubjectSchedule').checked)return;
+  const subjectId=clearSubjectScheduleId;
+  const subject=subjects.find(item=>String(item.id)===subjectId);
+  const button=document.getElementById('confirmClearSubjectScheduleBtn');
+  button.disabled=true;
+  button.setAttribute('aria-busy','true');
+  try{
+    const response=await fetch(`${API_URL}?resource=sections`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'clearSubjectSchedules',subjectId:Number(subjectId)})
+    });
+    const result=await response.json();
+    if(!response.ok||result.success!==true)throw new Error(result.message||'Could not clear subject schedules.');
+    closeClearSubjectScheduleConfirmation();
+    studentSchedules={};
+    viewingStudentScheduleId=null;
+    await refreshFromDatabase(true);
+    showToast(`Schedules cleared for ${subject?.code||subject?.name||'subject'}.`);
+  }catch(error){
+    console.error('Clear subject schedules error',error);
+    showToast(error.message||'Could not clear subject schedules.');
+    button.disabled=false;
+  }finally{
+    button.removeAttribute('aria-busy');
   }
 }
 function toggleNewAdminPassword(){
@@ -788,7 +926,7 @@ document.getElementById('cancelClass').addEventListener('click',closeClassModal)
 const classCardObserver=new MutationObserver(()=>{document.querySelectorAll('.section-card').forEach(card=>{if(card.querySelector('.add-class-btn'))return;const button=document.createElement('button');button.className='icon-btn add-class-btn';button.textContent='Add class';button.title='Add class';button.addEventListener('click',()=>openAddClassModal(card.dataset.id));const actions=card.querySelector('.section-actions');if(actions)actions.appendChild(button);});});classCardObserver.observe(document.getElementById('mainInner'),{childList:true,subtree:true});
 const classListObserver=new MutationObserver(()=>{document.querySelectorAll('.section-card').forEach(card=>{if(card.querySelector('.section-class-list'))return;const section=sections.find(item=>String(item.id)===String(card.dataset.id));if(!section)return;const summary=card.querySelector('.section-sub');if(summary)summary.style.display='none';const remaining=document.createElement('div');remaining.className='section-remaining';remaining.textContent=`Remaining slots: ${section.remainingSeats ?? Math.max(Number(section.maxCapacity||0)-Number(section.enrollmentCount||0),0)}/${section.maxCapacity||0}`;const list=document.createElement('div');list.className='section-class-list';const classes=section.classes||[];list.innerHTML=classes.length?classes.map((item,index)=>`<div class="section-class-row"><strong>${escapeHtml(item.classType||'Lecture')}</strong><span>${formatDays(item.days).join(', ')} ${fmtTime(item.start)} - ${fmtTime(item.end)}</span><span>${escapeHtml(item.instructor||'')}</span><span>${escapeHtml(item.room||'No room')}</span><button type="button" class="edit-class-btn" data-class-index="${index}">Edit class</button><button type="button" class="delete-class-btn" data-class-index="${index}">Delete class</button></div>`).join(''):'<div class="section-empty-class">If empty, add a class.</div>';list.querySelectorAll('.edit-class-btn').forEach(button=>button.addEventListener('click',()=>openEditClassModal(section.id,Number(button.dataset.classIndex))));list.querySelectorAll('.delete-class-btn').forEach(button=>button.addEventListener('click',()=>deleteClass(section.id,Number(button.dataset.classIndex))));const titleRow=card.querySelector('.section-title-row');if(titleRow)titleRow.after(remaining);if(summary)summary.after(list);else card.querySelector('.section-main')?.append(list);});});classListObserver.observe(document.getElementById('mainInner'),{childList:true,subtree:true});
 document.getElementById('hamburgerBtn').addEventListener('click',e=>{e.stopPropagation();toggleNavMenu();});document.getElementById('navSubjects').addEventListener('click',()=>switchView('subjects'));document.getElementById('navStudents').addEventListener('click',()=>switchView('students'));document.addEventListener('click',e=>{const menu=document.getElementById('navMenu');if(menu.classList.contains('open')&&!menu.contains(e.target)&&e.target.id!=='hamburgerBtn')toggleNavMenu(false);});
-document.getElementById('cancelSubject').addEventListener('click',closeSubjectModal);document.getElementById('saveSubject').addEventListener('click',()=>runSaveOnce('saveSubject',saveSubject));document.getElementById('cancelSection').addEventListener('click',closeSectionModal);document.getElementById('saveSection').addEventListener('click',()=>runSaveOnce('saveSection',saveSection));document.querySelectorAll('.day-toggle').forEach(btn=>btn.addEventListener('click',()=>{const day=btn.dataset.day;selectedDays=selectedDays.includes(day)?selectedDays.filter(item=>item!==day):[...selectedDays,day];setDayPickerUI();}));document.getElementById('cancelStudent').addEventListener('click',closeStudentModal);document.getElementById('saveStudent').addEventListener('click',saveStudent);document.addEventListener('keydown',e=>{if(e.key==='Escape'){toggleNavMenu(false);if(document.getElementById('removeInstructorOverlay').classList.contains('open'))cancelInstructorRemoval();}});
+document.getElementById('cancelSubject').addEventListener('click',closeSubjectModal);document.getElementById('saveSubject').addEventListener('click',()=>runSaveOnce('saveSubject',saveSubject));document.getElementById('cancelSection').addEventListener('click',closeSectionModal);document.getElementById('saveSection').addEventListener('click',()=>runSaveOnce('saveSection',saveSection));document.querySelectorAll('.day-toggle').forEach(btn=>btn.addEventListener('click',()=>{const day=btn.dataset.day;selectedDays=selectedDays.includes(day)?selectedDays.filter(item=>item!==day):[...selectedDays,day];setDayPickerUI();}));document.getElementById('cancelStudent').addEventListener('click',closeStudentModal);document.getElementById('saveStudent').addEventListener('click',saveStudent);document.addEventListener('keydown',e=>{if(e.key==='Escape'){toggleNavMenu(false);if(document.getElementById('removeInstructorOverlay').classList.contains('open'))cancelInstructorRemoval();if(document.getElementById('clearSubjectScheduleOverlay')?.classList.contains('open'))closeClearSubjectScheduleConfirmation();}});
 document.getElementById('navSettings').addEventListener('click',()=>switchView('settings'));
 let isRefreshing=false;
 let lastDatabaseSnapshot='';
