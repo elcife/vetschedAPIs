@@ -623,9 +623,9 @@ try {
             respond(['success' => false, 'message' => 'Section name, subject, and capacity are required'], 400);
         }
         foreach ($classes as $class) {
-            $classDays = is_array($class['days'] ?? null) ? $class['days'] : [];
-            if (count($classDays) !== 1) {
-                respond(['success' => false, 'message' => 'Each class must have exactly one day'], 400);
+            $classDays = is_array($class['days'] ?? null) ? array_values(array_unique(array_filter($class['days']))) : [];
+            if (!$classDays) {
+                respond(['success' => false, 'message' => 'Each class must have at least one day'], 400);
             }
         }
 
@@ -670,7 +670,7 @@ try {
         $offeringStmt = $conn->prepare('INSERT INTO offering (subject_id, room_id, instructor_id, max_capacity, schedule_id, section_id, class_type) VALUES (:subject, :room, :instructor, :capacity, :schedule, :section, :class_type)');
         foreach ($classes as $class) {
             $classType = ucfirst(strtolower(trim((string) ($class['classType'] ?? ''))));
-            $days = is_array($class['days'] ?? null) ? array_values(array_filter($class['days'])) : [];
+            $days = is_array($class['days'] ?? null) ? array_values(array_unique(array_filter($class['days']))) : [];
             $start = trim((string) ($class['start'] ?? ''));
             $end = trim((string) ($class['end'] ?? ''));
             $instructor = trim((string) ($class['instructor'] ?? ''));
