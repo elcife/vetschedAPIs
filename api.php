@@ -331,7 +331,6 @@ try {
                 'clearedSchedules' => 0,
                 'clearedPlots' => 0,
                 'returnedStudents' => 0,
-                'clearedRooms' => 0,
             ]);
         }
 
@@ -374,11 +373,6 @@ try {
         $plottingStmt->execute($params);
         $clearedPlots = $plottingStmt->rowCount();
 
-        $roomStmt = $conn->prepare("SELECT DISTINCT o.room_id FROM offering o
-            WHERE o.room_id IS NOT NULL AND ($targetOfferingSql)");
-        $roomStmt->execute($params);
-        $roomIds = $roomStmt->fetchAll(PDO::FETCH_COLUMN);
-
         $scheduleStmt = $conn->prepare("SELECT DISTINCT o.schedule_id FROM offering o
             WHERE o.schedule_id IS NOT NULL AND ($targetOfferingSql)");
         $scheduleStmt->execute($params);
@@ -400,21 +394,6 @@ try {
             }
         }
 
-        $closeSectionsStmt = $conn->prepare("UPDATE section SET is_open = FALSE WHERE subject_id IN ($subjectParamList) AND is_open = TRUE");
-        $closeSectionsStmt->execute($params);
-
-        $deleteRoomStmt = $conn->prepare('DELETE FROM room
-            WHERE room_id = :room_id
-              AND NOT EXISTS (SELECT 1 FROM offering WHERE room_id = :remaining_room_id)');
-        $clearedRooms = 0;
-        foreach ($roomIds as $roomId) {
-            $deleteRoomStmt->execute([
-                ':room_id' => (int) $roomId,
-                ':remaining_room_id' => (int) $roomId,
-            ]);
-            $clearedRooms += $deleteRoomStmt->rowCount();
-        }
-
         $conn->commit();
         respond([
             'success' => true,
@@ -424,7 +403,6 @@ try {
             'clearedSchedules' => $clearedSchedules,
             'clearedPlots' => $clearedPlots,
             'returnedStudents' => $returnedStudents,
-            'clearedRooms' => $clearedRooms,
         ]);
     }
 

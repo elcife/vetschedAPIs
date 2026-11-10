@@ -137,7 +137,7 @@ document.getElementById('loginPasswordToggle').addEventListener('click',()=>{
 document.getElementById('menuLogoutBtn').addEventListener('click',()=>{toggleNavMenu(false);logout();});
 
 /* ---------------- state ---------------- */
-let subjects=[],sections=[],students=[],instructors=[],currentView='subjects',activeYear=1,activeSemester=1,activeSubjectId=null,sectionFilterId='',editingSubjectId=null,editingSectionId=null,selectedDays=[],studentSearch='',viewingStudentScheduleId=null,studentSchedules={};
+let subjects=[],sections=[],students=[],instructors=[],currentView='subjects',activeYear=1,activeSemester=1,activeSubjectId=null,sectionFilterId='',editingSubjectId=null,editingSectionId=null,selectedDays=[],studentSearch='',instructorSearch='',viewingStudentScheduleId=null,studentSchedules={};
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':').map(Number),period=h>=12?'PM':'AM',h12=h%12===0?12:h%12;return`${h12}:${String(m).padStart(2,'0')} ${period}`;}
 function formatDays(days){const order=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];return(days||[]).slice().sort((a,b)=>order.indexOf(a)-order.indexOf(b));}
@@ -266,7 +266,11 @@ function renderSidebar(){
   document.getElementById('navSubjects').classList.toggle('active', currentView === 'subjects');
   document.getElementById('navStudents').classList.toggle('active', currentView === 'students');
   const body = document.getElementById('sidebarBody');
-  if (currentView === 'students') {
+  if (currentView === 'students' || currentView === 'instructors') {
+    if(currentView==='instructors'){
+      body.innerHTML='<div class="sidebar-note">Search and manage instructor records. Removing an instructor clears their class assignments but keeps other instructor records.</div>';
+      return;
+    }
     body.innerHTML = '<div class="sidebar-note">View each student\'s submitted schedule here. Student accounts are managed through registration.</div>';
     return;
   }
@@ -373,8 +377,34 @@ function renderStudentsMain(){
   el.querySelectorAll('.view-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>toggleStudentSchedule(btn.dataset.id)));
   el.querySelectorAll('.return-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>returnStudentSchedule(decodeURIComponent(btn.dataset.studentId))));
 }
+function renderInstructorsMain(){
+  const el=document.getElementById('mainInner');
+  const q=instructorSearch.trim().toLowerCase();
+  const filtered=instructors.filter(instructor=>String(instructor.name||instructor.instructor_name||'').toLowerCase().includes(q));
+  const rows=filtered.map(instructor=>{
+    const id=instructor.id??instructor.instructor_id;
+    const name=String(instructor.name||instructor.instructor_name||'');
+    return `<div class="student-row"><div class="student-info"><div class="student-avatar">${escapeHtml(initials(name||'?'))}</div><div><div class="student-name">${escapeHtml(name)}</div></div></div><div class="student-actions"><button type="button" class="admin-remove-btn instructor-record-delete" data-instructor-id="${escapeHtml(String(id))}" aria-label="Delete instructor">Delete</button></div></div>`;
+  }).join('');
+  el.innerHTML=`<div class="students-header"><div><h1>Instructors</h1><p>Search instructor records and remove instructors when needed.</p></div></div><div class="search-row"><div class="search-box"><input type="search" id="instructorSearchInput" placeholder="Search instructors by name" value="${escapeHtml(instructorSearch)}" aria-label="Search instructors by name"></div></div>${!instructors.length?'<div class="no-results"><h3>No instructors yet</h3><p>Instructor records appear here after they are added to a class.</p></div>':!filtered.length?`<div class="no-results"><h3>No matches</h3><p>No instructor found for "${escapeHtml(instructorSearch)}".</p></div>`:`<div class="students-table">${rows}</div>`}`;
+  const input=document.getElementById('instructorSearchInput');
+  input.addEventListener('input',event=>{
+    instructorSearch=event.target.value;
+    renderInstructorsMain();
+    const next=document.getElementById('instructorSearchInput');
+    next.focus();
+    next.setSelectionRange(next.value.length,next.value.length);
+  });
+  el.querySelectorAll('.instructor-record-delete').forEach(button=>button.addEventListener('click',()=>{
+    const instructor=instructors.find(item=>String(item.id??item.instructor_id)===button.dataset.instructorId);
+    if(!instructor)return;
+    button.dataset.instructorName=String(instructor.name||instructor.instructor_name||'');
+    button.setAttribute('aria-label',`Delete instructor ${button.dataset.instructorName}`);
+    removeInstructor(button,null);
+  }));
+}
 const renderSidebarBase=renderSidebar;
-renderSidebar=function(){renderSidebarBase();document.getElementById('navSettings').classList.toggle('active',currentView==='settings');if(currentView==='settings')document.getElementById('sidebarBody').innerHTML='<div class="sidebar-note">Manage semester-wide admin actions here.</div>';};
+renderSidebar=function(){renderSidebarBase();document.getElementById('navInstructors').classList.toggle('active',currentView==='instructors');document.getElementById('navSettings').classList.toggle('active',currentView==='settings');if(currentView==='settings')document.getElementById('sidebarBody').innerHTML='<div class="sidebar-note">Manage semester-wide admin actions here.</div>';};
 let clearSubjectScheduleTimer=null;
 let clearSubjectScheduleId=null;
 function renderSettingsMain(){
@@ -466,8 +496,8 @@ function renderSettingsMain(){
 
       <section class="settings-card settings-clear-schedules">
         <div>
-          <h2>Clear all schedules by semester</h2>
-          <p>Removes every class, day, time, room assignment, and student plot for all subjects in the selected semester. The subject records, their year levels, and teacher records are kept. Sections in that semester will be closed.</p>
+          <h2>Clear all classes by semester</h2>
+          <p>Removes all scheduled classes, days, times, and teacher and room assignments, plus student plots, from the sections for every subject in the selected semester. Subject, year, and section records stay, as do the teacher and room records in their master lists.</p>
         </div>
         <div class="field settings-clear-subject-field">
           <label for="clearSemesterScheduleSelect">Semester</label>
@@ -504,10 +534,10 @@ function renderSettingsMain(){
         </div>
         <div id="clearSubjectScheduleFinalWarning" style="display:none;">
           <p id="clearSubjectScheduleFinalMessage"></p>
-          <label class="clear-schedule-checkbox"><input type="checkbox" id="confirmClearSubjectSchedule"> I understand this will permanently remove all class schedules and student plots for the selected semester.</label>
+          <label class="clear-schedule-checkbox"><input type="checkbox" id="confirmClearSubjectSchedule"> I understand this permanently removes the classes, teacher and room assignments, and student plots for all subjects in the selected semester, but keeps their sections and teacher and room records.</label>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" id="cancelFinalClearSubjectSchedule">Cancel</button>
-            <button type="button" class="danger-action-btn" id="confirmClearSubjectScheduleBtn" disabled>Clear schedules</button>
+            <button type="button" class="danger-action-btn" id="confirmClearSubjectScheduleBtn" disabled>Clear classes</button>
           </div>
         </div>
       </div>
@@ -554,8 +584,8 @@ function openClearSubjectScheduleConfirmation(){
   }
   clearSubjectScheduleId=String(semesterValue);
   const semesterLabel=`Semester ${semesterValue}`;
-  document.getElementById('clearSubjectScheduleWarning').textContent=`Warning 1 of 2: This will remove every class, day, time, room assignment, and student plot for all subjects in ${semesterLabel}. The subject records, year levels, and teacher records will remain.`;
-  document.getElementById('clearSubjectScheduleFinalMessage').textContent=`Warning 2 of 2: Confirm only if you want to permanently clear all schedule data for ${semesterLabel}.`;
+  document.getElementById('clearSubjectScheduleWarning').textContent=`Warning 1 of 2: This will remove all scheduled classes, days, times, teacher and room assignments, and student plots from the sections for every subject in ${semesterLabel}. Subject, year, and section records, plus teacher and room records in their master lists, will remain.`;
+  document.getElementById('clearSubjectScheduleFinalMessage').textContent=`Warning 2 of 2: Confirm only if you want to permanently clear all classes and teacher and room assignments for ${semesterLabel}. Subject, section, teacher, and room records will remain.`;
   document.getElementById('clearSubjectScheduleFirstWarning').style.display='';
   document.getElementById('clearSubjectScheduleFinalWarning').style.display='none';
   document.getElementById('confirmClearSubjectSchedule').checked=false;
@@ -764,7 +794,7 @@ async function changeAdminPassword(){
     error.style.display='block';
   }
 }
-function renderMain(){currentView==='students'?renderStudentsMain():currentView==='settings'?renderSettingsMain():renderSubjectsMain();}
+function renderMain(){currentView==='students'?renderStudentsMain():currentView==='instructors'?renderInstructorsMain():currentView==='settings'?renderSettingsMain():renderSubjectsMain();}
 function addSectionDayLabels(){document.querySelectorAll('.section-card').forEach(card=>{const section=sections.find(item=>String(item.id)===String(card.dataset.id)),summary=card.querySelector('.section-sub');if(!section||!summary||summary.querySelector('.section-day-label'))return;const typeLabel=document.createElement('span');typeLabel.className='section-day-label';typeLabel.textContent=`Class: ${(section.classTypes||[section.classType||'Lecture']).join(' / ')}`;summary.prepend(typeLabel);const label=document.createElement('span');label.className='section-day-label';label.textContent=`Days: ${formatDays(section.days).join(', ')||'Not set'}`;summary.prepend(label);});}
 function renderAll(){renderSidebar();renderMain();addSectionDayLabels();}
 
@@ -926,7 +956,7 @@ document.getElementById('removeInstructorOverlay').addEventListener('click',even
 document.getElementById('cancelClass').addEventListener('click',closeClassModal);document.getElementById('saveClass').addEventListener('click',()=>runSaveOnce('saveClass',saveClass));
 const classCardObserver=new MutationObserver(()=>{document.querySelectorAll('.section-card').forEach(card=>{if(card.querySelector('.add-class-btn'))return;const button=document.createElement('button');button.className='icon-btn add-class-btn';button.textContent='Add class';button.title='Add class';button.addEventListener('click',()=>openAddClassModal(card.dataset.id));const actions=card.querySelector('.section-actions');if(actions)actions.appendChild(button);});});classCardObserver.observe(document.getElementById('mainInner'),{childList:true,subtree:true});
 const classListObserver=new MutationObserver(()=>{document.querySelectorAll('.section-card').forEach(card=>{if(card.querySelector('.section-class-list'))return;const section=sections.find(item=>String(item.id)===String(card.dataset.id));if(!section)return;const summary=card.querySelector('.section-sub');if(summary)summary.style.display='none';const remaining=document.createElement('div');remaining.className='section-remaining';remaining.textContent=`Remaining slots: ${section.remainingSeats ?? Math.max(Number(section.maxCapacity||0)-Number(section.enrollmentCount||0),0)}/${section.maxCapacity||0}`;const list=document.createElement('div');list.className='section-class-list';const classes=section.classes||[];list.innerHTML=classes.length?classes.map((item,index)=>`<div class="section-class-row"><strong>${escapeHtml(item.classType||'Lecture')}</strong><span>${formatDays(item.days).join(', ')} ${fmtTime(item.start)} - ${fmtTime(item.end)}</span><span>${escapeHtml(item.instructor||'')}</span><span>${escapeHtml(item.room||'No room')}</span><button type="button" class="edit-class-btn" data-class-index="${index}">Edit class</button><button type="button" class="delete-class-btn" data-class-index="${index}">Delete class</button></div>`).join(''):'<div class="section-empty-class">If empty, add a class.</div>';list.querySelectorAll('.edit-class-btn').forEach(button=>button.addEventListener('click',()=>openEditClassModal(section.id,Number(button.dataset.classIndex))));list.querySelectorAll('.delete-class-btn').forEach(button=>button.addEventListener('click',()=>deleteClass(section.id,Number(button.dataset.classIndex))));const titleRow=card.querySelector('.section-title-row');if(titleRow)titleRow.after(remaining);if(summary)summary.after(list);else card.querySelector('.section-main')?.append(list);});});classListObserver.observe(document.getElementById('mainInner'),{childList:true,subtree:true});
-document.getElementById('hamburgerBtn').addEventListener('click',e=>{e.stopPropagation();toggleNavMenu();});document.getElementById('navSubjects').addEventListener('click',()=>switchView('subjects'));document.getElementById('navStudents').addEventListener('click',()=>switchView('students'));document.addEventListener('click',e=>{const menu=document.getElementById('navMenu');if(menu.classList.contains('open')&&!menu.contains(e.target)&&e.target.id!=='hamburgerBtn')toggleNavMenu(false);});
+document.getElementById('hamburgerBtn').addEventListener('click',e=>{e.stopPropagation();toggleNavMenu();});document.getElementById('navSubjects').addEventListener('click',()=>switchView('subjects'));document.getElementById('navStudents').addEventListener('click',()=>switchView('students'));document.getElementById('navInstructors').addEventListener('click',()=>switchView('instructors'));document.addEventListener('click',e=>{const menu=document.getElementById('navMenu');if(menu.classList.contains('open')&&!menu.contains(e.target)&&e.target.id!=='hamburgerBtn')toggleNavMenu(false);});
 document.getElementById('cancelSubject').addEventListener('click',closeSubjectModal);document.getElementById('saveSubject').addEventListener('click',()=>runSaveOnce('saveSubject',saveSubject));document.getElementById('cancelSection').addEventListener('click',closeSectionModal);document.getElementById('saveSection').addEventListener('click',()=>runSaveOnce('saveSection',saveSection));document.querySelectorAll('.day-toggle').forEach(btn=>btn.addEventListener('click',()=>{const day=btn.dataset.day;selectedDays=selectedDays.includes(day)?selectedDays.filter(item=>item!==day):[...selectedDays,day];setDayPickerUI();}));document.getElementById('cancelStudent').addEventListener('click',closeStudentModal);document.getElementById('saveStudent').addEventListener('click',saveStudent);document.addEventListener('keydown',e=>{if(e.key==='Escape'){toggleNavMenu(false);if(document.getElementById('removeInstructorOverlay').classList.contains('open'))cancelInstructorRemoval();if(document.getElementById('clearSubjectScheduleOverlay')?.classList.contains('open'))closeClearSubjectScheduleConfirmation();}});
 document.getElementById('navSettings').addEventListener('click',()=>switchView('settings'));
 let isRefreshing=false;
