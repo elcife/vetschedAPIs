@@ -466,18 +466,19 @@ function renderSettingsMain(){
 
       <section class="settings-card settings-clear-schedules">
         <div>
-          <h2>Clear all schedules for a subject</h2>
-          <p>Removes the selected subject's classes, days, times, room assignments, and student plots. The subject, its year and semester, sections, and teacher records are kept. Sections for this subject will be closed.</p>
+          <h2>Clear all schedules by semester</h2>
+          <p>Removes every class, day, time, room assignment, and student plot for all subjects in the selected semester. The subject records, their year levels, and teacher records are kept. Sections in that semester will be closed.</p>
         </div>
         <div class="field settings-clear-subject-field">
-          <label for="clearSubjectScheduleSelect">Subject</label>
-          <select id="clearSubjectScheduleSelect" ${subjects.length?'':'disabled'}>
-            <option value="">${subjects.length?'Select a subject':'No subjects available'}</option>
-            ${subjectOptions}
+          <label for="clearSemesterScheduleSelect">Semester</label>
+          <select id="clearSemesterScheduleSelect">
+            <option value="">Select a semester</option>
+            <option value="1">Semester 1</option>
+            <option value="2">Semester 2</option>
           </select>
         </div>
         <div class="settings-form-actions">
-          <button type="button" class="danger-action-btn" id="clearSubjectScheduleBtn" ${subjects.length?'disabled':''}>Clear all schedules</button>
+          <button type="button" class="danger-action-btn" id="clearSemesterScheduleBtn" disabled>Clear all schedules</button>
         </div>
       </section>
 
@@ -492,7 +493,7 @@ function renderSettingsMain(){
     </div>
     <div class="overlay" id="clearSubjectScheduleOverlay">
       <div class="modal instructor-confirm-modal clear-schedule-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="clearSubjectScheduleTitle">
-        <h3 id="clearSubjectScheduleTitle">Clear subject schedules?</h3>
+        <h3 id="clearSubjectScheduleTitle">Clear semester schedules?</h3>
         <div id="clearSubjectScheduleFirstWarning">
           <p id="clearSubjectScheduleWarning"></p>
           <p class="clear-schedule-countdown" id="clearSubjectScheduleCountdown" role="status" aria-live="polite"></p>
@@ -503,7 +504,7 @@ function renderSettingsMain(){
         </div>
         <div id="clearSubjectScheduleFinalWarning" style="display:none;">
           <p id="clearSubjectScheduleFinalMessage"></p>
-          <label class="clear-schedule-checkbox"><input type="checkbox" id="confirmClearSubjectSchedule"> I understand this will permanently remove this subject's class schedule and student plots.</label>
+          <label class="clear-schedule-checkbox"><input type="checkbox" id="confirmClearSubjectSchedule"> I understand this will permanently remove all class schedules and student plots for the selected semester.</label>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" id="cancelFinalClearSubjectSchedule">Cancel</button>
             <button type="button" class="danger-action-btn" id="confirmClearSubjectScheduleBtn" disabled>Clear schedules</button>
@@ -515,10 +516,10 @@ function renderSettingsMain(){
   document.getElementById('changePasswordBtn').addEventListener('click', changeAdminPassword);
   document.querySelectorAll('[data-password-target]').forEach(toggle=>toggle.addEventListener('click',()=>togglePasswordVisibility(toggle)));
   document.getElementById('setSemesterBtn').addEventListener('click', setSemester);
-  const clearSubjectSelect=document.getElementById('clearSubjectScheduleSelect');
-  const clearSubjectButton=document.getElementById('clearSubjectScheduleBtn');
-  clearSubjectSelect.addEventListener('change',()=>{clearSubjectButton.disabled=!clearSubjectSelect.value;});
-  clearSubjectButton.addEventListener('click',openClearSubjectScheduleConfirmation);
+  const clearSemesterSelect=document.getElementById('clearSemesterScheduleSelect');
+  const clearSemesterButton=document.getElementById('clearSemesterScheduleBtn');
+  clearSemesterSelect.addEventListener('change',()=>{clearSemesterButton.disabled=!clearSemesterSelect.value;});
+  clearSemesterButton.addEventListener('click',openClearSubjectScheduleConfirmation);
   document.getElementById('cancelClearSubjectSchedule').addEventListener('click',closeClearSubjectScheduleConfirmation);
   document.getElementById('cancelFinalClearSubjectSchedule').addEventListener('click',closeClearSubjectScheduleConfirmation);
   document.getElementById('continueClearSubjectSchedule').addEventListener('click',showFinalClearSubjectScheduleWarning);
@@ -541,19 +542,20 @@ function closeClearSubjectScheduleConfirmation(){
     clearSubjectScheduleTimer=null;
   }
   clearSubjectScheduleId=null;
+  document.getElementById('clearSemesterScheduleSelect').value='';
+  document.getElementById('clearSemesterScheduleBtn').disabled=true;
   document.getElementById('clearSubjectScheduleOverlay')?.classList.remove('open');
 }
 function openClearSubjectScheduleConfirmation(){
-  const subjectId=document.getElementById('clearSubjectScheduleSelect').value;
-  const subject=subjects.find(item=>String(item.id)===String(subjectId));
-  if(!subject){
-    showToast('Select a subject first.');
+  const semesterValue=document.getElementById('clearSemesterScheduleSelect').value;
+  if(!semesterValue){
+    showToast('Select a semester first.');
     return;
   }
-  clearSubjectScheduleId=String(subject.id);
-  const label=`${subject.code||''}${subject.code?' — ':''}${subject.name||'Subject'}`;
-  document.getElementById('clearSubjectScheduleWarning').textContent=`Warning 1 of 2: This will remove every class, day, time, room assignment, and student plot for ${label}. The subject, year, semester, sections, and teacher records will remain.`;
-  document.getElementById('clearSubjectScheduleFinalMessage').textContent=`Warning 2 of 2: Confirm only if you want to permanently clear all schedule data for ${label}.`;
+  clearSubjectScheduleId=String(semesterValue);
+  const semesterLabel=`Semester ${semesterValue}`;
+  document.getElementById('clearSubjectScheduleWarning').textContent=`Warning 1 of 2: This will remove every class, day, time, room assignment, and student plot for all subjects in ${semesterLabel}. The subject records, year levels, and teacher records will remain.`;
+  document.getElementById('clearSubjectScheduleFinalMessage').textContent=`Warning 2 of 2: Confirm only if you want to permanently clear all schedule data for ${semesterLabel}.`;
   document.getElementById('clearSubjectScheduleFirstWarning').style.display='';
   document.getElementById('clearSubjectScheduleFinalWarning').style.display='none';
   document.getElementById('confirmClearSubjectSchedule').checked=false;
@@ -585,8 +587,7 @@ function showFinalClearSubjectScheduleWarning(){
 }
 async function clearSubjectSchedules(){
   if(!clearSubjectScheduleId||!document.getElementById('confirmClearSubjectSchedule').checked)return;
-  const subjectId=clearSubjectScheduleId;
-  const subject=subjects.find(item=>String(item.id)===subjectId);
+  const semester=Number(clearSubjectScheduleId);
   const button=document.getElementById('confirmClearSubjectScheduleBtn');
   button.disabled=true;
   button.setAttribute('aria-busy','true');
@@ -594,18 +595,18 @@ async function clearSubjectSchedules(){
     const response=await fetch(`${API_URL}?resource=sections`,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'clearSubjectSchedules',subjectId:Number(subjectId)})
+      body:JSON.stringify({action:'clearSemesterSchedules',semester})
     });
     const result=await response.json();
-    if(!response.ok||result.success!==true)throw new Error(result.message||'Could not clear subject schedules.');
+    if(!response.ok||result.success!==true)throw new Error(result.message||'Could not clear semester schedules.');
     closeClearSubjectScheduleConfirmation();
     studentSchedules={};
     viewingStudentScheduleId=null;
     await refreshFromDatabase(true);
-    showToast(`Schedules cleared for ${subject?.code||subject?.name||'subject'}.`);
+    showToast(`Schedules cleared for Semester ${semester}.`);
   }catch(error){
-    console.error('Clear subject schedules error',error);
-    showToast(error.message||'Could not clear subject schedules.');
+    console.error('Clear semester schedules error',error);
+    showToast(error.message||'Could not clear semester schedules.');
     button.disabled=false;
   }finally{
     button.removeAttribute('aria-busy');

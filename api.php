@@ -311,6 +311,123 @@ try {
         respond(['success' => false, 'message' => 'POST required'], 405);
     }
 
+    if ($resource === 'sections' && ($data['action'] ?? '') === 'clearSemesterSchedules') {
+        $semester = (int) ($data['semester'] ?? 0);
+        if (!in_array($semester, [1, 2], true)) {
+            respond(['success' => false, 'message' => 'A valid semester is required'], 400);
+        }
+
+        $conn->beginTransaction();
+        $subjectStmt = $conn->prepare('SELECT subject_id FROM subject WHERE semester = :semester ORDER BY subject_id FOR UPDATE');
+        $subjectStmt->execute([':semester' => $semester]);
+        $subjectIds = $subjectStmt->fetchAll(PDO::FETCH_COLUMN);
+        if (empty($subjectIds)) {
+            $conn->commit();
+            respond([
+                'success' => true,
+                'semester' => $semester,
+                'subjectsAffected' => 0,
+                'clearedClasses' => 0,
+                'clearedSchedules' => 0,
+                'clearedPlots' => 0,
+                'returnedStudents' => 0,
+                'clearedRooms' => 0,
+            ]);
+        }
+
+        $params = [];
+        foreach ($subjectIds as $index => $subjectId) {
+            $params[':subject_' . $index] = (int) $subjectId;
+        }
+        $subjectParamList = implode(', ', array_keys($params));
+        $targetOfferingSql = "o.subject_id IN ($subjectParamList)
+            OR o.section_id IN (SELECT section_id FROM section WHERE subject_id IN ($subjectParamList))
+            OR o.schedule_id IN (
+                SELECT schedule_id FROM schedule
+                WHERE section_id IN (SELECT section_id FROM section WHERE subject_id IN ($subjectParamList))
+            )";
+
+        $studentScheduleStmt = $conn->prepare("UPDATE schedule_submission
+            SET is_submitted = FALSE, submitted_at = NULL
+            WHERE is_submitted = TRUE AND TRIM(student_id) IN (
+                SELECT DISTINCT TRIM(p.student_id)
+                FROM plotting p
+                JOIN offering o ON o.offering_id = p.offering_id
+                WHERE $targetOfferingSql
+            )");
+        $studentScheduleStmt->execute($params);
+        $returnedStudents = $studentScheduleStmt->rowCount();
+
+        $plottingStatusStmt = $conn->prepare("UPDATE plotting SET status = 'Enrolled'
+            WHERE TRIM(student_id) IN (
+                SELECT DISTINCT TRIM(p.student_id)
+                FROM plotting p
+                JOIN offering o ON o.offering_id = p.offering_id
+                WHERE $targetOfferingSql
+            )");
+        $plottingStatusStmt->execute($params);
+
+        $plottingStmt = $conn->prepare("DELETE FROM plotting
+            WHERE offering_id IN (
+                SELECT o.offering_id FROM offering o WHERE $targetOfferingSql
+            )");
+        $plottingStmt->execute($params);
+        $clearedPlots = $plottingStmt->rowCount();
+
+        $roomStmt = $conn->prepare("SELECT DISTINCT o.room_id FROM offering o
+            WHERE o.room_id IS NOT NULL AND ($targetOfferingSql)");
+        $roomStmt->execute($params);
+        $roomIds = $roomStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $scheduleStmt = $conn->prepare("SELECT DISTINCT o.schedule_id FROM offering o
+            WHERE o.schedule_id IS NOT NULL AND ($targetOfferingSql)");
+        $scheduleStmt->execute($params);
+        $scheduleIds = $scheduleStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $offeringStmt = $conn->prepare("DELETE FROM offering o WHERE $targetOfferingSql");
+        $offeringStmt->execute($params);
+        $clearedClasses = $offeringStmt->rowCount();
+
+        $sectionScheduleStmt = $conn->prepare("DELETE FROM schedule
+            WHERE section_id IN (SELECT section_id FROM section WHERE subject_id IN ($subjectParamList))");
+        $sectionScheduleStmt->execute($params);
+        $clearedSchedules = $sectionScheduleStmt->rowCount();
+        if ($scheduleIds) {
+            $deleteScheduleStmt = $conn->prepare('DELETE FROM schedule WHERE schedule_id = :id');
+            foreach ($scheduleIds as $scheduleId) {
+                $deleteScheduleStmt->execute([':id' => (int) $scheduleId]);
+                $clearedSchedules += $deleteScheduleStmt->rowCount();
+            }
+        }
+
+        $closeSectionsStmt = $conn->prepare("UPDATE section SET is_open = FALSE WHERE subject_id IN ($subjectParamList) AND is_open = TRUE");
+        $closeSectionsStmt->execute($params);
+
+        $deleteRoomStmt = $conn->prepare('DELETE FROM room
+            WHERE room_id = :room_id
+              AND NOT EXISTS (SELECT 1 FROM offering WHERE room_id = :remaining_room_id)');
+        $clearedRooms = 0;
+        foreach ($roomIds as $roomId) {
+            $deleteRoomStmt->execute([
+                ':room_id' => (int) $roomId,
+                ':remaining_room_id' => (int) $roomId,
+            ]);
+            $clearedRooms += $deleteRoomStmt->rowCount();
+        }
+
+        $conn->commit();
+        respond([
+            'success' => true,
+            'semester' => $semester,
+            'subjectsAffected' => count($subjectIds),
+            'clearedClasses' => $clearedClasses,
+            'clearedSchedules' => $clearedSchedules,
+            'clearedPlots' => $clearedPlots,
+            'returnedStudents' => $returnedStudents,
+            'clearedRooms' => $clearedRooms,
+        ]);
+    }
+
     if ($resource === 'sections' && ($data['action'] ?? '') === 'clearSubjectSchedules') {
         $subjectId = $data['subjectId'] ?? null;
         if (!is_numeric($subjectId) || (int) $subjectId < 1) {
