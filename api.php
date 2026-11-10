@@ -406,6 +406,67 @@ try {
         ]);
     }
 
+    if ($resource === 'sections' && ($data['action'] ?? '') === 'createBatch') {
+        $subjectId = filter_var($data['subjectId'] ?? null, FILTER_VALIDATE_INT);
+        $prefix = strtoupper(trim((string) ($data['prefix'] ?? '')));
+        $count = filter_var($data['count'] ?? null, FILTER_VALIDATE_INT);
+        $capacity = filter_var($data['maxCapacity'] ?? null, FILTER_VALIDATE_INT);
+        if ($subjectId === false || $subjectId < 1 ||
+            !preg_match('/^[A-Z]$/', $prefix) ||
+            $count === false || $count < 1 || $count > 100 ||
+            $capacity === false || $capacity < 1) {
+            respond(['success' => false, 'message' => 'A valid subject, one-letter section name, section count (1–100), and capacity are required'], 400);
+        }
+
+        $conn->beginTransaction();
+        $subjectStmt = $conn->prepare('SELECT year_level FROM subject WHERE subject_id = :id FOR UPDATE');
+        $subjectStmt->execute([':id' => $subjectId]);
+        $yearLevel = $subjectStmt->fetchColumn();
+        if ($yearLevel === false) {
+            $conn->rollBack();
+            respond(['success' => false, 'message' => 'Subject not found'], 404);
+        }
+        if ((int) $yearLevel !== 1) {
+            $conn->rollBack();
+            respond(['success' => false, 'message' => 'Quick section creation is only available for Year 1 subjects'], 400);
+        }
+
+        $names = [];
+        for ($number = 1; $number <= $count; $number++) {
+            $names[] = $prefix . $number;
+        }
+        foreach ($names as $name) {
+            if (strlen($name) > 50) {
+                $conn->rollBack();
+                respond(['success' => false, 'message' => 'Generated section names cannot exceed 50 characters'], 400);
+            }
+            lockUniqueName($conn, 'section-name:', $name, (int) $subjectId);
+        }
+
+        $nameParams = [':subject' => (int) $subjectId];
+        foreach ($names as $index => $name) {
+            $nameParams[':name_' . $index] = strtolower($name);
+        }
+        $namePlaceholders = implode(', ', array_map(static fn(int $index): string => ':name_' . $index, array_keys($names)));
+        $duplicateStmt = $conn->prepare("SELECT section_name FROM section WHERE subject_id = :subject AND LOWER(TRIM(section_name)) IN ($namePlaceholders) LIMIT 1");
+        $duplicateStmt->execute($nameParams);
+        if ($duplicateStmt->fetchColumn()) {
+            $conn->rollBack();
+            respond(['success' => false, 'message' => 'One or more generated section names already exist for this subject'], 409);
+        }
+
+        $insertStmt = $conn->prepare('INSERT INTO section (section_name, subject_id, max_capacity, is_open) VALUES (:name, :subject, :capacity, FALSE)');
+        foreach ($names as $name) {
+            $insertStmt->execute([
+                ':name' => $name,
+                ':subject' => (int) $subjectId,
+                ':capacity' => $capacity,
+            ]);
+        }
+        $conn->commit();
+        respond(['success' => true, 'sections' => $names, 'count' => count($names)]);
+    }
+
     if ($resource === 'sections' && ($data['action'] ?? '') === 'clearSubjectSchedules') {
         $subjectId = $data['subjectId'] ?? null;
         if (!is_numeric($subjectId) || (int) $subjectId < 1) {

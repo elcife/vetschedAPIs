@@ -301,6 +301,7 @@ button{font-family:inherit;}
 }
 .section-head h2{font-size:1.15rem;margin:0;}
 .section-controls{display:flex;align-items:center;gap:8px;}
+.section-controls{flex-wrap:wrap;justify-content:flex-end;}
 .section-controls select{padding:9px 30px 9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--charcoal-soft);font:600 .82rem Inter,sans-serif;}
 .section-controls select{display:none;}
 .add-section-btn{
@@ -318,6 +319,10 @@ button{font-family:inherit;}
 }
 .add-section-btn:hover{background:var(--forest-dark);}
 .add-section-btn:active{transform:scale(0.98);}
+.add-section-secondary-btn{background:var(--sage);box-shadow:none;}
+.add-section-secondary-btn:hover{background:var(--forest);}
+.bulk-sections-help{margin:0 0 18px;color:var(--charcoal-soft);font-size:.9rem;line-height:1.55;}
+.bulk-sections-preview{margin:0;color:var(--forest-dark);font-size:.9rem;font-weight:600;line-height:1.5;}
 
 .sections-list{
   display:flex;

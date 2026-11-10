@@ -291,7 +291,7 @@ function renderSidebar(){
 }
 
 /* ---------------- main views ---------------- */
-function renderSubjectsMain(){const el=document.getElementById('mainInner');if(!activeSubjectId){if(!subjects.length){el.innerHTML='<div class="no-subject-selected"><svg viewBox="0 0 24 24" fill="none"><path d="M12 14.2c-2.6 0-5.4 2-5.4 4.6 0 1.4 1.1 2.4 2.5 2.4.9 0 1.6-.4 2.3-.8.4-.3.9-.5 1.4-.5s1 .2 1.4.5c.7.4 1.4.8 2.3.8 1.4 0 2.5-1 2.5-2.4 0-2.6-2.8-4.6-5.4-4.6z" fill="#3f5638"/><ellipse cx="6" cy="10.5" rx="1.6" ry="2.1" fill="#3f5638"/><ellipse cx="18" cy="10.5" rx="1.6" ry="2.1" fill="#3f5638"/><ellipse cx="9" cy="6.8" rx="1.4" ry="1.9" fill="#3f5638"/><ellipse cx="15" cy="6.8" rx="1.4" ry="1.9" fill="#3f5638"/></svg><h2>Welcome to Vetsched Admin</h2><p>Add a subject to start building out its sections and schedules.</p><button class="btn-primary" id="emptyAddSubject">+ Add subject</button></div>';document.getElementById('emptyAddSubject').addEventListener('click',openAddSubjectModal);return;}el.innerHTML='<div class="no-subject-selected"><h2>Pick a subject</h2><p>Select a subject from the left to view or add its sections.</p></div>';return;}const subject=subjects.find(s=>s.id===activeSubjectId);if(!subject){activeSubjectId=null;renderSubjectsMain();return;}const allSubjSections=sections.filter(sec=>sec.subjectId===subject.id),sectionOptions=allSubjSections.map(sec=>`<option value="${escapeHtml(sec.id)}" ${String(sec.id)===String(sectionFilterId)?'selected':''}>${escapeHtml(sec.type)}</option>`).join(''),subjSections=sectionFilterId?allSubjSections.filter(sec=>String(sec.id)===String(sectionFilterId)):allSubjSections;el.innerHTML=`<div class="topbar"><div class="subject-heading"><h1>${escapeHtml(subject.name)}</h1><div class="subject-meta"><span class="code-pill">${escapeHtml(subject.code)}</span><span class="year-pill">Year ${Number(subject.yearLevel||subject.year_level||1)}</span><span class="year-pill">Semester ${Number(subject.semester||1)}</span></div></div><div class="topbar-actions"><button class="icon-btn" id="editSubjectBtn" title="Edit subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="icon-btn danger" id="deleteSubjectBtn" title="Delete subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div></div><div class="section-head"><h2>Sections</h2><div class="section-controls"><select id="sectionFilter" aria-label="Choose section"><option value="">All sections</option>${sectionOptions}</select><button class="add-section-btn" id="openAddSection">+ Add section</button></div></div>${subjSections.length===0?'<div class="empty-state"><h3>No sections yet</h3><p>Add a section to set its time frame and assign an instructor.</p><button id="emptyAddSection">+ Add section</button></div>':`<div class="sections-list">${subjSections.map(sec=>`<div class="section-card" data-id="${sec.id}"><div class="section-main"><div class="section-title-row"><span class="section-type">${escapeHtml(sec.type)}</span><div class="section-days">${sec.days.map(d=>`<span class="day-chip">${d}</span>`).join('')}</div></div><div class="section-sub"><span>${fmtTime(sec.start)} – ${fmtTime(sec.end)}</span><span>${escapeHtml(sec.instructor)}</span>${sec.room?`<span>${escapeHtml(sec.room)}</span>`:''}</div></div><div class="section-actions"><button class="icon-btn edit-section-btn" title="Edit section">Edit</button><button class="icon-btn danger delete-section-btn" title="Delete section">Delete</button></div></div>`).join('')}</div>`}`;document.getElementById('editSubjectBtn').addEventListener('click',()=>openEditSubjectModal(subject.id));document.getElementById('deleteSubjectBtn').addEventListener('click',()=>deleteSubject(subject.id));document.getElementById('sectionFilter')?.addEventListener('change',e=>{sectionFilterId=e.target.value;renderSubjectsMain();});document.getElementById('openAddSection')?.addEventListener('click',openAddSectionModal);document.getElementById('emptyAddSection')?.addEventListener('click',openAddSectionModal);el.querySelectorAll('.edit-section-btn').forEach(btn=>btn.addEventListener('click',e=>openEditSectionModal(e.target.closest('.section-card').dataset.id)));el.querySelectorAll('.delete-section-btn').forEach(btn=>btn.addEventListener('click',e=>deleteSection(e.target.closest('.section-card').dataset.id)));}
+function renderSubjectsMain(){const el=document.getElementById('mainInner');if(!activeSubjectId){if(!subjects.length){el.innerHTML='<div class="no-subject-selected"><svg viewBox="0 0 24 24" fill="none"><path d="M12 14.2c-2.6 0-5.4 2-5.4 4.6 0 1.4 1.1 2.4 2.5 2.4.9 0 1.6-.4 2.3-.8.4-.3.9-.5 1.4-.5s1 .2 1.4.5c.7.4 1.4.8 2.3.8 1.4 0 2.5-1 2.5-2.4 0-2.6-2.8-4.6-5.4-4.6z" fill="#3f5638"/><ellipse cx="6" cy="10.5" rx="1.6" ry="2.1" fill="#3f5638"/><ellipse cx="18" cy="10.5" rx="1.6" ry="2.1" fill="#3f5638"/><ellipse cx="9" cy="6.8" rx="1.4" ry="1.9" fill="#3f5638"/><ellipse cx="15" cy="6.8" rx="1.4" ry="1.9" fill="#3f5638"/></svg><h2>Welcome to Vetsched Admin</h2><p>Add a subject to start building out its sections and schedules.</p><button class="btn-primary" id="emptyAddSubject">+ Add subject</button></div>';document.getElementById('emptyAddSubject').addEventListener('click',openAddSubjectModal);return;}el.innerHTML='<div class="no-subject-selected"><h2>Pick a subject</h2><p>Select a subject from the left to view or add its sections.</p></div>';return;}const subject=subjects.find(s=>s.id===activeSubjectId);if(!subject){activeSubjectId=null;renderSubjectsMain();return;}const yearLevel=Number(subject.yearLevel||subject.year_level||1),allSubjSections=sections.filter(sec=>sec.subjectId===subject.id),sectionOptions=allSubjSections.map(sec=>`<option value="${escapeHtml(sec.id)}" ${String(sec.id)===String(sectionFilterId)?'selected':''}>${escapeHtml(sec.type)}</option>`).join(''),subjSections=sectionFilterId?allSubjSections.filter(sec=>String(sec.id)===String(sectionFilterId)):allSubjSections;el.innerHTML=`<div class="topbar"><div class="subject-heading"><h1>${escapeHtml(subject.name)}</h1><div class="subject-meta"><span class="code-pill">${escapeHtml(subject.code)}</span><span class="year-pill">Year ${yearLevel}</span><span class="year-pill">Semester ${Number(subject.semester||1)}</span></div></div><div class="topbar-actions"><button class="icon-btn" id="editSubjectBtn" title="Edit subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button class="icon-btn danger" id="deleteSubjectBtn" title="Delete subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div></div><div class="section-head"><h2>Sections</h2><div class="section-controls"><select id="sectionFilter" aria-label="Choose section"><option value="">All sections</option>${sectionOptions}</select>${yearLevel===1?'<button class="add-section-btn add-section-secondary-btn" id="openBulkAddSections" type="button">Quick add sections</button>':''}<button class="add-section-btn" id="openAddSection">+ Add section</button></div></div>${subjSections.length===0?'<div class="empty-state"><h3>No sections yet</h3><p>Add a section to set its time frame and assign an instructor.</p><button id="emptyAddSection">+ Add section</button></div>':`<div class="sections-list">${subjSections.map(sec=>`<div class="section-card" data-id="${sec.id}"><div class="section-main"><div class="section-title-row"><span class="section-type">${escapeHtml(sec.type)}</span><div class="section-days">${sec.days.map(d=>`<span class="day-chip">${d}</span>`).join('')}</div></div><div class="section-sub"><span>${fmtTime(sec.start)} – ${fmtTime(sec.end)}</span><span>${escapeHtml(sec.instructor)}</span>${sec.room?`<span>${escapeHtml(sec.room)}</span>`:''}</div></div><div class="section-actions"><button class="icon-btn edit-section-btn" title="Edit section">Edit</button><button class="icon-btn danger delete-section-btn" title="Delete section">Delete</button></div></div>`).join('')}</div>`}`;document.getElementById('editSubjectBtn').addEventListener('click',()=>openEditSubjectModal(subject.id));document.getElementById('deleteSubjectBtn').addEventListener('click',()=>deleteSubject(subject.id));document.getElementById('sectionFilter')?.addEventListener('change',e=>{sectionFilterId=e.target.value;renderSubjectsMain();});document.getElementById('openAddSection')?.addEventListener('click',openAddSectionModal);document.getElementById('openBulkAddSections')?.addEventListener('click',openBulkAddSectionsModal);document.getElementById('emptyAddSection')?.addEventListener('click',openAddSectionModal);el.querySelectorAll('.edit-section-btn').forEach(btn=>btn.addEventListener('click',e=>openEditSectionModal(e.target.closest('.section-card').dataset.id)));el.querySelectorAll('.delete-section-btn').forEach(btn=>btn.addEventListener('click',e=>deleteSection(e.target.closest('.section-card').dataset.id)));}
 function scheduleMarkup(schedule){
   if(!schedule.length) return '<div class="student-schedule-empty">No submitted schedule yet.</div>';
   return `<div class="student-schedule"><div class="student-schedule-title">Submitted schedule</div>${schedule.map(course=>`<div class="student-schedule-row"><div><strong>${escapeHtml(course.courseCode)}</strong> ${escapeHtml(course.courseName)}</div><div>${escapeHtml(course.type)} · ${escapeHtml(course.section)}</div><div>${escapeHtml(course.day)}, ${escapeHtml(formatScheduleTimeRange(course.timeRange))} · ${escapeHtml(course.room)} · ${escapeHtml(course.instructor)}</div></div>`).join('')}</div>`;
@@ -926,6 +926,74 @@ function openEditSectionModal(id){const sec=sections.find(item=>String(item.id)=
 async function saveSection(){const type=document.getElementById('sectionType').value.trim(),maxCapacity=Number(document.getElementById('maxCapacity').value),classes=readClassSlots(),subjectId=activeSubjectId;let valid=Boolean(type)&&maxCapacity>0&&classes.length>0;document.getElementById('sectionTypeError').style.display=type?'none':'block';document.getElementById('maxCapacityError').style.display=maxCapacity>0?'none':'block';document.getElementById('classSlotError').style.display=classes.length?'none':'block';classes.forEach(slot=>{if(!slot.days.length||!slot.start||!slot.end||slot.start>=slot.end||!slot.instructor)valid=false;});if(!valid)return;if(!subjectId){showToast('Select a subject before adding a section');return;}const section=editingSectionId?sections.find(item=>String(item.id)===String(editingSectionId)):null;const payload={id:section?.id||uid(),subjectId,type,maxCapacity,classes,isOpen:section?.isOpen??false};const saved=await saveList('sections',[payload]);if(!saved)return;closeSectionModal();await refreshFromDatabase(true);showToast(editingSectionId?'Section updated':'Section added');}
 
 /* ---------------- wiring ---------------- */
+function updateBulkSectionsPreview(){
+  const prefix=document.getElementById('bulkSectionPrefix').value.trim().toUpperCase();
+  const count=Number(document.getElementById('bulkSectionCount').value);
+  const preview=document.getElementById('bulkSectionsPreview');
+  if(!/^[A-Z]$/.test(prefix)||!Number.isInteger(count)||count<1||count>100){
+    preview.textContent='';
+    return;
+  }
+  const names=Array.from({length:count},(_,index)=>`${prefix}${index+1}`);
+  preview.textContent=`Will create: ${names.join(', ')}`;
+}
+function openBulkAddSectionsModal(){
+  const subject=subjects.find(item=>String(item.id)===String(activeSubjectId));
+  if(!subject||Number(subject.yearLevel||subject.year_level||1)!==1){
+    showToast('Quick section creation is only available for Year 1 subjects.');
+    return;
+  }
+  document.getElementById('bulkSectionsTitle').textContent=`Quick add sections for ${subject.name}`;
+  document.getElementById('bulkSectionPrefix').value='A';
+  document.getElementById('bulkSectionCount').value='5';
+  document.getElementById('bulkSectionCapacity').value='50';
+  clearErrors(['bulkSectionPrefixError','bulkSectionCountError','bulkSectionCapacityError']);
+  updateBulkSectionsPreview();
+  document.getElementById('bulkSectionsOverlay').classList.add('open');
+  document.getElementById('bulkSectionPrefix').focus();
+}
+function closeBulkAddSectionsModal(){
+  document.getElementById('bulkSectionsOverlay').classList.remove('open');
+}
+async function createBulkSections(){
+  const subject=subjects.find(item=>String(item.id)===String(activeSubjectId));
+  const prefix=document.getElementById('bulkSectionPrefix').value.trim().toUpperCase();
+  const count=Number(document.getElementById('bulkSectionCount').value);
+  const maxCapacity=Number(document.getElementById('bulkSectionCapacity').value);
+  const validPrefix=/^[A-Z]$/.test(prefix);
+  const validCount=Number.isInteger(count)&&count>=1&&count<=100;
+  const validCapacity=Number.isInteger(maxCapacity)&&maxCapacity>=1;
+  document.getElementById('bulkSectionPrefixError').style.display=validPrefix?'none':'block';
+  document.getElementById('bulkSectionCountError').style.display=validCount?'none':'block';
+  document.getElementById('bulkSectionCapacityError').style.display=validCapacity?'none':'block';
+  if(!subject||Number(subject.yearLevel||subject.year_level||1)!==1){
+    showToast('Quick section creation is only available for Year 1 subjects.');
+    return;
+  }
+  if(!validPrefix||!validCount||!validCapacity)return;
+  const button=document.getElementById('saveBulkSections');
+  button.disabled=true;
+  button.setAttribute('aria-busy','true');
+  try{
+    const response=await fetch(`${API_URL}?resource=sections`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'createBatch',subjectId:Number(subject.id),prefix,count,maxCapacity})
+    });
+    const result=await response.json();
+    if(!response.ok||result.success!==true)throw new Error(result.message||'Could not create sections.');
+    closeBulkAddSectionsModal();
+    sectionFilterId='';
+    await refreshFromDatabase(true);
+    showToast(`Created ${result.count} sections: ${result.sections.join(', ')}`);
+  }catch(error){
+    console.error('Bulk section creation error',error);
+    showToast(error.message||'Could not create sections.');
+  }finally{
+    button.disabled=false;
+    button.removeAttribute('aria-busy');
+  }
+}
 function openAddSectionModal(){editingSectionId=null;document.getElementById('sectionModalTitle').textContent='Add section';document.getElementById('sectionType').value='';document.getElementById('maxCapacity').value='';clearErrors(['sectionTypeError','maxCapacityError']);document.getElementById('sectionOverlay').classList.add('open');document.getElementById('sectionType').focus();}
 function openEditSectionModal(id){const section=sections.find(item=>String(item.id)===String(id));if(!section)return;editingSectionId=id;document.getElementById('sectionModalTitle').textContent='Edit section';document.getElementById('sectionType').value=section.type||'';document.getElementById('maxCapacity').value=section.maxCapacity||'';clearErrors(['sectionTypeError','maxCapacityError']);document.getElementById('sectionOverlay').classList.add('open');}
 async function saveSection(){const type=document.getElementById('sectionType').value.trim(),maxCapacity=Number(document.getElementById('maxCapacity').value),subjectId=activeSubjectId;document.getElementById('sectionTypeError').style.display=type?'none':'block';document.getElementById('maxCapacityError').style.display=maxCapacity>0?'none':'block';if(!type||maxCapacity<1)return;if(!subjectId){showToast('Select a subject before adding a section');return;}const section=editingSectionId?sections.find(item=>String(item.id)===String(editingSectionId)):null;const payload=section?{id:section.id,action:'updateDetails',subjectId,type,maxCapacity}:{id:uid(),subjectId,type,maxCapacity,classes:[],isOpen:false};if(!await saveList('sections',[payload]))return;closeSectionModal();await refreshFromDatabase(true);showToast(section?'Section updated':'Section added');}
@@ -959,6 +1027,11 @@ const classListObserver=new MutationObserver(()=>{document.querySelectorAll('.se
 document.getElementById('hamburgerBtn').addEventListener('click',e=>{e.stopPropagation();toggleNavMenu();});document.getElementById('navSubjects').addEventListener('click',()=>switchView('subjects'));document.getElementById('navStudents').addEventListener('click',()=>switchView('students'));document.getElementById('navInstructors').addEventListener('click',()=>switchView('instructors'));document.addEventListener('click',e=>{const menu=document.getElementById('navMenu');if(menu.classList.contains('open')&&!menu.contains(e.target)&&e.target.id!=='hamburgerBtn')toggleNavMenu(false);});
 document.getElementById('cancelSubject').addEventListener('click',closeSubjectModal);document.getElementById('saveSubject').addEventListener('click',()=>runSaveOnce('saveSubject',saveSubject));document.getElementById('cancelSection').addEventListener('click',closeSectionModal);document.getElementById('saveSection').addEventListener('click',()=>runSaveOnce('saveSection',saveSection));document.querySelectorAll('.day-toggle').forEach(btn=>btn.addEventListener('click',()=>{const day=btn.dataset.day;selectedDays=selectedDays.includes(day)?selectedDays.filter(item=>item!==day):[...selectedDays,day];setDayPickerUI();}));document.getElementById('cancelStudent').addEventListener('click',closeStudentModal);document.getElementById('saveStudent').addEventListener('click',saveStudent);document.addEventListener('keydown',e=>{if(e.key==='Escape'){toggleNavMenu(false);if(document.getElementById('removeInstructorOverlay').classList.contains('open'))cancelInstructorRemoval();if(document.getElementById('clearSubjectScheduleOverlay')?.classList.contains('open'))closeClearSubjectScheduleConfirmation();}});
 document.getElementById('navSettings').addEventListener('click',()=>switchView('settings'));
+document.getElementById('bulkSectionPrefix').addEventListener('input',event=>{event.target.value=event.target.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,1);updateBulkSectionsPreview();});
+document.getElementById('bulkSectionCount').addEventListener('input',updateBulkSectionsPreview);
+document.getElementById('cancelBulkSections').addEventListener('click',closeBulkAddSectionsModal);
+document.getElementById('saveBulkSections').addEventListener('click',createBulkSections);
+document.getElementById('bulkSectionsOverlay').addEventListener('click',event=>{if(event.target===event.currentTarget)closeBulkAddSectionsModal();});
 let isRefreshing=false;
 let lastDatabaseSnapshot='';
 async function refreshFromDatabase(showLoading=false){
