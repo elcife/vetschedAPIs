@@ -144,22 +144,19 @@ $resource = $_GET['resource'] ?? '';
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($resource === 'subjects') {
-            $semester = getActiveSemester($conn);
-            $stmt = $conn->prepare('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject WHERE semester = :semester ORDER BY year_level, semester, subject_id');
-            $stmt->execute([':semester' => (int)$semester]);
+            $stmt = $conn->query('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject ORDER BY year_level, semester, subject_id');
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             respond($rows);
         }
 
         if ($resource === 'sections') {
-            $semester = getActiveSemester($conn);
             $sql = "SELECT s.section_id AS id, s.section_name AS type,
                            s.is_open AS \"isOpen\",
                            s.subject_id AS \"subjectId\",
                            s.max_capacity AS \"maxCapacity\",
                            COUNT(DISTINCT ss.student_id) AS \"enrollmentCount\"
                     FROM section s
-                    JOIN subject sub ON sub.subject_id = s.subject_id AND sub.semester = :semester
+                    JOIN subject sub ON sub.subject_id = s.subject_id
                     LEFT JOIN (
                         SELECT section_id, offering_id FROM offering WHERE section_id IS NOT NULL
                         UNION
@@ -172,9 +169,7 @@ try {
                         ON TRIM(ss.student_id) = TRIM(p.student_id) AND ss.is_submitted = TRUE
                     GROUP BY s.section_id, s.section_name, s.is_open, s.subject_id, s.max_capacity
                     ORDER BY s.section_id";
-            $stmt = $conn->prepare($sql);
-            $stmt->execute([':semester' => (int)$semester]);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $rows = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
             $classSql = "SELECT sc.section_id,
                                o.class_type AS \"classType\", sc.day_of_the_week AS day,
@@ -185,12 +180,11 @@ try {
                         FROM schedule sc
                         JOIN offering o ON o.schedule_id = sc.schedule_id
                             AND (o.section_id = sc.section_id OR o.section_id IS NULL)
-                        JOIN subject sub ON sub.subject_id = o.subject_id AND sub.semester = :semester2
+                        JOIN subject sub ON sub.subject_id = o.subject_id
                         LEFT JOIN instructor i ON i.instructor_id = o.instructor_id
                         LEFT JOIN room r ON r.room_id = o.room_id
                         WHERE sc.section_id IS NOT NULL";
-            $slotStmt = $conn->prepare($classSql);
-            $slotStmt->execute([':semester2' => (int)$semester]);
+            $slotStmt = $conn->query($classSql);
             $slotsBySection = [];
             foreach ($slotStmt->fetchAll(PDO::FETCH_ASSOC) as $slot) {
                 $slotsBySection[(int) $slot['section_id']][] = $slot;
