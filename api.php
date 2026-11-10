@@ -447,16 +447,12 @@ try {
         }
 
         $conn->beginTransaction();
-        $subjectStmt = $conn->prepare('SELECT year_level FROM subject WHERE subject_id = :id FOR UPDATE');
+        $subjectStmt = $conn->prepare('SELECT subject_id FROM subject WHERE subject_id = :id FOR UPDATE');
         $subjectStmt->execute([':id' => $subjectId]);
-        $yearLevel = $subjectStmt->fetchColumn();
-        if ($yearLevel === false) {
+        $subjectExists = $subjectStmt->fetchColumn();
+        if ($subjectExists === false) {
             $conn->rollBack();
             respond(['success' => false, 'message' => 'Subject not found'], 404);
-        }
-        if ((int) $yearLevel !== 1) {
-            $conn->rollBack();
-            respond(['success' => false, 'message' => 'Quick section creation is only available for Year 1 subjects'], 400);
         }
 
         $names = [];
