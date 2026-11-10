@@ -267,7 +267,7 @@ try {
     // Subject payloads contain a semester, so don't treat them as global semester changes.
     $postedSem = $data['semester'] ?? $data['sem'] ?? $_POST['semester'] ?? $_POST['sem'] ?? null;
     $action = $data['action'] ?? $_POST['action'] ?? '';
-    if (($resource !== 'subjects' && $postedSem !== null && $postedSem !== '') ||
+    if (($resource !== 'subjects' && $action !== 'clearSemesterSchedules' && $postedSem !== null && $postedSem !== '') ||
         in_array($action, ['setSemester', 'endSemester', 'set_semester', 'end_semester'], true)) {
         if ($postedSem !== null && $postedSem !== '') {
             $semester = (int) $postedSem;
@@ -616,15 +616,6 @@ try {
         ]);
         $clearedPlots = $plottingStmt->rowCount();
 
-        $roomStmt = $conn->prepare("SELECT DISTINCT o.room_id FROM offering o
-            WHERE o.room_id IS NOT NULL AND ($targetOfferingSql)");
-        $roomStmt->execute([
-            ':subject_offering' => (int) $subjectId,
-            ':subject_section' => (int) $subjectId,
-            ':subject_schedule' => (int) $subjectId,
-        ]);
-        $roomIds = $roomStmt->fetchAll(PDO::FETCH_COLUMN);
-
         $scheduleStmt = $conn->prepare("SELECT DISTINCT o.schedule_id FROM offering o
             WHERE o.schedule_id IS NOT NULL AND ($targetOfferingSql)");
         $scheduleStmt->execute([
@@ -657,18 +648,6 @@ try {
         $closeSectionsStmt = $conn->prepare('UPDATE section SET is_open = FALSE WHERE subject_id = :subject AND is_open = TRUE');
         $closeSectionsStmt->execute([':subject' => (int) $subjectId]);
 
-        $deleteRoomStmt = $conn->prepare('DELETE FROM room
-            WHERE room_id = :room_id
-              AND NOT EXISTS (SELECT 1 FROM offering WHERE room_id = :remaining_room_id)');
-        $clearedRooms = 0;
-        foreach ($roomIds as $roomId) {
-            $deleteRoomStmt->execute([
-                ':room_id' => (int) $roomId,
-                ':remaining_room_id' => (int) $roomId,
-            ]);
-            $clearedRooms += $deleteRoomStmt->rowCount();
-        }
-
         $conn->commit();
         respond([
             'success' => true,
@@ -676,7 +655,6 @@ try {
             'clearedSchedules' => $clearedSchedules,
             'clearedPlots' => $clearedPlots,
             'returnedStudents' => $returnedStudents,
-            'clearedRooms' => $clearedRooms,
         ]);
     }
 
