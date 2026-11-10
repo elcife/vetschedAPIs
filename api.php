@@ -209,7 +209,8 @@ try {
             $sql = "SELECT student_id AS id, student_id AS \"studentId\",
                            CONCAT_WS(' ', first_name, last_name) AS name,
                            year_level AS \"yearLevel\",
-                           semester
+                           semester,
+                           encoding_done AS \"encodingDone\"
                     FROM account ORDER BY student_id";
             respond($conn->query($sql)->fetchAll(PDO::FETCH_ASSOC));
         }
@@ -290,6 +291,8 @@ try {
 
         $stmtAcc = $conn->prepare('UPDATE account SET semester = :semester');
         $stmtAcc->execute([':semester' => $semester]);
+        $clearEncodingStatus = $conn->prepare('UPDATE account SET encoding_done = FALSE WHERE encoding_done = TRUE');
+        $clearEncodingStatus->execute();
 
         $conn->commit();
         respond([
@@ -303,6 +306,27 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         respond(['success' => false, 'message' => 'POST required'], 405);
+    }
+
+    if ($resource === 'students' && ($data['action'] ?? '') === 'setEncodingDone') {
+        $studentId = trim((string) ($data['studentId'] ?? ''));
+        $encodingDone = filter_var($data['encodingDone'] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($studentId === '' || $encodingDone === null) {
+            respond(['success' => false, 'message' => 'A valid student ID and done status are required'], 400);
+        }
+
+        $stmt = $conn->prepare('UPDATE account SET encoding_done = :encoding_done WHERE TRIM(student_id) = :student_id');
+        $stmt->bindValue(':encoding_done', $encodingDone, PDO::PARAM_BOOL);
+        $stmt->bindValue(':student_id', $studentId);
+        $stmt->execute();
+        if ($stmt->rowCount() === 0) {
+            $exists = $conn->prepare('SELECT 1 FROM account WHERE TRIM(student_id) = :student_id');
+            $exists->execute([':student_id' => $studentId]);
+            if (!$exists->fetchColumn()) {
+                respond(['success' => false, 'message' => 'Student not found'], 404);
+            }
+        }
+        respond(['success' => true, 'studentId' => $studentId, 'encodingDone' => $encodingDone]);
     }
 
     if ($resource === 'sections' && ($data['action'] ?? '') === 'clearSemesterSchedules') {
@@ -350,6 +374,16 @@ try {
             )");
         $studentScheduleStmt->execute($params);
         $returnedStudents = $studentScheduleStmt->rowCount();
+
+        $clearEncodingStatusStmt = $conn->prepare("UPDATE account
+            SET encoding_done = FALSE
+            WHERE TRIM(student_id) IN (
+                SELECT DISTINCT TRIM(p.student_id)
+                FROM plotting p
+                JOIN offering o ON o.offering_id = p.offering_id
+                WHERE $targetOfferingSql
+            ) AND encoding_done = TRUE");
+        $clearEncodingStatusStmt->execute($params);
 
         $plottingStatusStmt = $conn->prepare("UPDATE plotting SET status = 'Enrolled'
             WHERE TRIM(student_id) IN (
@@ -545,6 +579,19 @@ try {
             ':subject_schedule' => (int) $subjectId,
         ]);
         $returnedStudents = $studentScheduleStmt->rowCount();
+        $clearEncodingStatusStmt = $conn->prepare("UPDATE account
+            SET encoding_done = FALSE
+            WHERE encoding_done = TRUE AND TRIM(student_id) IN (
+                SELECT DISTINCT TRIM(p.student_id)
+                FROM plotting p
+                JOIN offering o ON o.offering_id = p.offering_id
+                WHERE $targetOfferingSql
+            )");
+        $clearEncodingStatusStmt->execute([
+            ':subject_offering' => (int) $subjectId,
+            ':subject_section' => (int) $subjectId,
+            ':subject_schedule' => (int) $subjectId,
+        ]);
         $plottingStatusStmt = $conn->prepare("UPDATE plotting SET status = 'Enrolled'
             WHERE TRIM(student_id) IN (
                 SELECT DISTINCT TRIM(p.student_id)
@@ -647,6 +694,8 @@ try {
             respond(['success' => false, 'message' => 'No submitted schedule was found to return'], 409);
         }
 
+        $clearEncodingStatus = $conn->prepare('UPDATE account SET encoding_done = FALSE WHERE TRIM(student_id) = TRIM(:studentId)');
+        $clearEncodingStatus->execute([':studentId' => $studentId]);
         $plottingStmt = $conn->prepare("UPDATE plotting SET status = 'Enrolled' WHERE TRIM(student_id) = TRIM(:studentId)");
         $plottingStmt->execute([':studentId' => $studentId]);
         $conn->commit();
@@ -887,6 +936,8 @@ try {
         $clearSchedules->execute();
         $returnSchedules = $conn->prepare('UPDATE schedule_submission SET is_submitted = FALSE, submitted_at = NULL');
         $returnSchedules->execute();
+        $clearEncodingStatus = $conn->prepare('UPDATE account SET encoding_done = FALSE WHERE encoding_done = TRUE');
+        $clearEncodingStatus->execute();
         $stmt = $conn->prepare('UPDATE account SET semester = :semester');
         $stmt->execute([':semester' => $semester]);
         $conn->commit();

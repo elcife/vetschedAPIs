@@ -12,6 +12,7 @@ CREATE TABLE "public"."account" (
     "last_name" character varying(100) NOT NULL,
     "year_level" integer,
     "semester" smallint DEFAULT 1 NOT NULL,
+    "encoding_done" boolean DEFAULT false NOT NULL,
     CONSTRAINT "account_email_key" UNIQUE ("email"),
     CONSTRAINT "account_pkey" PRIMARY KEY ("student_id")
 );

@@ -430,6 +430,10 @@ button{font-family:inherit;}
 .students-header p{color:var(--charcoal-soft);margin:0;font-size:0.93rem;}
 .students-refresh-btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;}
 .students-refresh-btn svg{width:16px;height:16px;}
+.student-status-tabs{display:flex;gap:8px;margin:-8px 0 20px;border-bottom:1px solid var(--line);}
+.student-status-tab{padding:10px 14px;border:0;border-bottom:3px solid transparent;background:transparent;color:var(--charcoal-soft);font:600 .88rem Inter,sans-serif;cursor:pointer;}
+.student-status-tab:hover{color:var(--forest-dark);background:var(--sage-soft);}
+.student-status-tab.active{border-bottom-color:var(--forest);color:var(--forest-dark);}
 .search-row{
   display:flex;
   gap:10px;
@@ -504,6 +508,11 @@ button{font-family:inherit;}
 .student-actions{display:flex;gap:6px;flex-shrink:0;}
 .view-schedule-btn{border:1px solid var(--forest);border-radius:9px;background:var(--sage-soft);color:var(--forest-dark);padding:8px 12px;font:700 .8rem Inter,sans-serif;cursor:pointer;transition:background .12s ease;}
 .view-schedule-btn:hover{background:#cfe0c6;}
+.mark-done-btn,.unmark-done-btn{border:1px solid var(--forest);border-radius:9px;background:var(--forest);color:var(--paper);padding:8px 12px;font:700 .8rem Inter,sans-serif;cursor:pointer;transition:background .12s ease;}
+.mark-done-btn:hover,.unmark-done-btn:hover{background:var(--forest-dark);}
+.unmark-done-btn{border-color:var(--line);background:var(--paper);color:var(--charcoal-soft);}
+.unmark-done-btn:hover{border-color:var(--danger);background:#fff8f4;color:var(--danger);}
+.mark-done-btn:disabled,.unmark-done-btn:disabled{opacity:.55;cursor:wait;}
 .student-entry{border-bottom:1px solid var(--line);}
 .student-entry:last-child{border-bottom:none;}
 .student-entry .student-row{border-bottom:none;}
@@ -514,6 +523,7 @@ button{font-family:inherit;}
 .return-schedule-btn{border:1px solid var(--danger);border-radius:9px;background:#fff8f4;color:var(--danger);padding:8px 12px;font:700 .8rem Inter,sans-serif;cursor:pointer;transition:background .12s ease;}
 .return-schedule-btn:hover{background:#f6e6e0;}
 .student-schedule-empty{margin:0 18px 14px 72px;padding:12px;border:1px dashed var(--line);border-radius:12px;color:var(--charcoal-soft);font-size:.84rem;}
+@media(max-width:640px){.student-row{align-items:flex-start;flex-direction:column;}.student-actions{width:100%;flex-wrap:wrap;}.student-status-tabs{overflow-x:auto;}}
 .no-results{
   text-align:center;
   padding:60px 20px;

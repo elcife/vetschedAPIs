@@ -137,7 +137,7 @@ document.getElementById('loginPasswordToggle').addEventListener('click',()=>{
 document.getElementById('menuLogoutBtn').addEventListener('click',()=>{toggleNavMenu(false);logout();});
 
 /* ---------------- state ---------------- */
-let subjects=[],sections=[],students=[],instructors=[],currentView='subjects',activeYear=1,activeSemester=1,activeSubjectId=null,sectionFilterId='',editingSubjectId=null,editingSectionId=null,selectedDays=[],studentSearch='',instructorSearch='',viewingStudentScheduleId=null,studentSchedules={};
+let subjects=[],sections=[],students=[],instructors=[],currentView='subjects',activeYear=1,activeSemester=1,activeSubjectId=null,sectionFilterId='',editingSubjectId=null,editingSectionId=null,selectedDays=[],studentSearch='',studentListFilter='pending',instructorSearch='',viewingStudentScheduleId=null,studentSchedules={};
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':').map(Number),period=h>=12?'PM':'AM',h12=h%12===0?12:h%12;return`${h12}:${String(m).padStart(2,'0')} ${period}`;}
 function formatDays(days){const order=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];return(days||[]).slice().sort((a,b)=>order.indexOf(a)-order.indexOf(b));}
@@ -307,6 +307,7 @@ async function returnStudentSchedule(studentId){
     });
     const result=await response.json();
     if(!response.ok||result.success===false)throw new Error(result.message||'Could not return schedule');
+    student.encodingDone=false;
     delete studentSchedules[studentId];
     viewingStudentScheduleId=null;
     renderStudentsMain();
@@ -314,6 +315,30 @@ async function returnStudentSchedule(studentId){
   }catch(error){
     console.error('Schedule return error',error);
     showToast(error.message||'Could not return schedule');
+  }
+}
+function studentEncodingIsDone(student){
+  return student.encodingDone===true||student.encodingDone==='t'||student.encodingDone===1||student.encodingDone==='1'||student.encodingDone==='true';
+}
+async function setStudentEncodingDone(studentId,encodingDone,button){
+  const student=students.find(item=>String(item.id)===String(studentId));
+  if(!student)return;
+  button.disabled=true;
+  try{
+    const response=await fetch(`${API_URL}?resource=students`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'setEncodingDone',studentId:student.studentId,encodingDone})
+    });
+    const result=await response.json();
+    if(!response.ok||result.success!==true)throw new Error(result.message||'Could not update encoding status.');
+    student.encodingDone=encodingDone;
+    renderStudentsMain();
+    showToast(encodingDone?`${student.name} marked as done`:`${student.name} moved back to pending`);
+  }catch(error){
+    console.error('Student encoding status error',error);
+    showToast(error.message||'Could not update encoding status.');
+    button.disabled=false;
   }
 }
 async function toggleStudentSchedule(studentId){
@@ -364,18 +389,26 @@ async function refreshStudents(){
 function renderStudentsMain(){
   const el=document.getElementById('mainInner');
   const q=studentSearch.trim().toLowerCase();
-  const filtered=q?students.filter(s=>s.studentId.toLowerCase().includes(q)||s.name.toLowerCase().includes(q)):students;
+  const doneStudents=students.filter(studentEncodingIsDone);
+  const pendingStudents=students.filter(student=>!studentEncodingIsDone(student));
+  const visibleStudents=studentListFilter==='done'?doneStudents:pendingStudents;
+  const filtered=q?visibleStudents.filter(s=>String(s.studentId||'').toLowerCase().includes(q)||String(s.name||'').toLowerCase().includes(q)):visibleStudents;
   const rows=filtered.map(s=>{
     const expanded=String(viewingStudentScheduleId)===String(s.id);
     const hasSchedule=(studentSchedules[s.id]||[]).length>0;
-    return `<div class="student-entry"><div class="student-row" data-id="${s.id}"><div class="student-info"><div class="student-avatar">${escapeHtml(initials(s.name||'?'))}</div><div><div class="student-name">${escapeHtml(s.name)}</div><div class="student-id">ID: ${escapeHtml(s.studentId)}${s.yearLevel?` · Year ${escapeHtml(s.yearLevel)}`:''}${s.semester?` · Semester ${escapeHtml(s.semester)}`:''}</div></div></div><div class="student-actions"><button class="view-schedule-btn" data-id="${s.id}">${expanded?'Hide schedule':'View schedule'}</button>${expanded&&hasSchedule?`<button class="return-schedule-btn" data-student-id="${encodeURIComponent(s.id)}">Return schedule</button>`:''}</div></div>${expanded?scheduleMarkup(studentSchedules[s.id]||[]):''}</div>`;
+    const isDone=studentEncodingIsDone(s);
+    return `<div class="student-entry"><div class="student-row" data-id="${escapeHtml(String(s.id))}"><div class="student-info"><div class="student-avatar">${escapeHtml(initials(s.name||'?'))}</div><div><div class="student-name">${escapeHtml(s.name)}</div><div class="student-id">ID: ${escapeHtml(s.studentId)}${s.yearLevel?` · Year ${escapeHtml(s.yearLevel)}`:''}${s.semester?` · Semester ${escapeHtml(s.semester)}`:''}</div></div></div><div class="student-actions"><button class="view-schedule-btn" data-id="${escapeHtml(String(s.id))}">${expanded?'Hide schedule':'View schedule'}</button><button type="button" class="${isDone?'unmark-done-btn':'mark-done-btn'}" data-student-id="${escapeHtml(String(s.id))}">${isDone?'Unmark done':'Mark as done'}</button>${expanded&&hasSchedule?`<button class="return-schedule-btn" data-student-id="${encodeURIComponent(s.id)}">Return schedule</button>`:''}</div></div>${expanded?scheduleMarkup(studentSchedules[s.id]||[]):''}</div>`;
   }).join('');
-  el.innerHTML=`<div class="students-header"><div><h1>Students</h1><p>View student accounts and their submitted schedules.</p></div><button class="btn-secondary students-refresh-btn" id="refreshStudentsBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"/><path d="M3 4v6h6"/><path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"/><path d="M21 20v-6h-6"/></svg>Refresh</button></div><div class="search-row"><div class="search-box"><input type="text" id="studentSearchInput" placeholder="Search by student ID or name" value="${escapeHtml(studentSearch)}"></div></div>${!students.length?'<div class="no-results"><h3>No students yet</h3><p>Students appear here after they register.</p></div>':!filtered.length?`<div class="no-results"><h3>No matches</h3><p>No student found for "${escapeHtml(studentSearch)}".</p></div>`:`<div class="students-table">${rows}</div>`}`;
+  el.innerHTML=`<div class="students-header"><div><h1>Students</h1><p>Track schedule encoding progress and review submitted schedules.</p></div><button class="btn-secondary students-refresh-btn" id="refreshStudentsBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"/><path d="M3 4v6h6"/><path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"/><path d="M21 20v-6h-6"/></svg>Refresh</button></div><div class="student-status-tabs" role="tablist" aria-label="Student encoding status"><button type="button" class="student-status-tab ${studentListFilter==='pending'?'active':''}" id="pendingStudentsTab" role="tab" aria-selected="${studentListFilter==='pending'}">Pending (${pendingStudents.length})</button><button type="button" class="student-status-tab ${studentListFilter==='done'?'active':''}" id="doneStudentsTab" role="tab" aria-selected="${studentListFilter==='done'}">Already done (${doneStudents.length})</button></div><div class="search-row"><div class="search-box"><input type="text" id="studentSearchInput" placeholder="Search by student ID or name" value="${escapeHtml(studentSearch)}"></div></div>${!students.length?'<div class="no-results"><h3>No students yet</h3><p>Students appear here after they register.</p></div>':!filtered.length?`<div class="no-results"><h3>${q?'No matches':studentListFilter==='done'?'No students marked done':'No pending students'}</h3><p>${q?`No student found for "${escapeHtml(studentSearch)}".`:studentListFilter==='done'?'Students marked as done will appear here.':'All students have been marked as done.'}</p></div>`:`<div class="students-table">${rows}</div>`}`;
   document.getElementById('refreshStudentsBtn').addEventListener('click',refreshStudents);
+  document.getElementById('pendingStudentsTab').addEventListener('click',()=>{studentListFilter='pending';viewingStudentScheduleId=null;renderStudentsMain();});
+  document.getElementById('doneStudentsTab').addEventListener('click',()=>{studentListFilter='done';viewingStudentScheduleId=null;renderStudentsMain();});
   const input=document.getElementById('studentSearchInput');
   input.addEventListener('input',e=>{studentSearch=e.target.value;renderStudentsMain();const next=document.getElementById('studentSearchInput');next.focus();next.setSelectionRange(next.value.length,next.value.length);});
   el.querySelectorAll('.view-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>toggleStudentSchedule(btn.dataset.id)));
   el.querySelectorAll('.return-schedule-btn').forEach(btn=>btn.addEventListener('click',()=>returnStudentSchedule(decodeURIComponent(btn.dataset.studentId))));
+  el.querySelectorAll('.mark-done-btn').forEach(btn=>btn.addEventListener('click',()=>setStudentEncodingDone(btn.dataset.studentId,true,btn)));
+  el.querySelectorAll('.unmark-done-btn').forEach(btn=>btn.addEventListener('click',()=>setStudentEncodingDone(btn.dataset.studentId,false,btn)));
 }
 function renderInstructorsMain(){
   const el=document.getElementById('mainInner');
@@ -908,7 +941,7 @@ async function setSemester(){
     const response=await fetch(`${API_URL}?resource=students`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'setSemester',semester})});
     const result=await response.json();
     if(!response.ok||result.success===false)throw new Error(result.message||'Could not set semester');
-    students=students.map(student=>({...student,semester}));
+    students=students.map(student=>({...student,semester,encodingDone:false}));
     studentSchedules={};
     viewingStudentScheduleId=null;
     showToast(`Semester ${semester} set; schedules returned and cleared`);
