@@ -461,6 +461,56 @@ try {
         respond(['success' => true, 'sections' => $names, 'count' => count($names)]);
     }
 
+    if ($resource === 'sections' && ($data['action'] ?? '') === 'toggleAll') {
+        $isOpen = filter_var($data['isOpen'] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($isOpen === null) {
+            respond(['success' => false, 'message' => 'A valid open state is required'], 400);
+        }
+
+        $conn->beginTransaction();
+        if ($isOpen) {
+            $eligibleStmt = $conn->query('SELECT COUNT(*) FROM section s
+                WHERE s.is_open = FALSE
+                  AND EXISTS (
+                    SELECT 1 FROM offering o
+                    WHERE o.section_id = s.section_id
+                       OR o.schedule_id IN (SELECT schedule_id FROM schedule WHERE section_id = s.section_id)
+                  )');
+            $eligibleCount = (int) $eligibleStmt->fetchColumn();
+            $updateStmt = $conn->prepare('UPDATE section s SET is_open = TRUE
+                WHERE s.is_open = FALSE
+                  AND EXISTS (
+                    SELECT 1 FROM offering o
+                    WHERE o.section_id = s.section_id
+                       OR o.schedule_id IN (SELECT schedule_id FROM schedule WHERE section_id = s.section_id)
+                  )');
+            $updateStmt->execute();
+            $changed = $updateStmt->rowCount();
+            $skippedStmt = $conn->query('SELECT COUNT(*) FROM section s
+                WHERE s.is_open = FALSE
+                  AND NOT EXISTS (
+                    SELECT 1 FROM offering o
+                    WHERE o.section_id = s.section_id
+                       OR o.schedule_id IN (SELECT schedule_id FROM schedule WHERE section_id = s.section_id)
+                  )');
+            $skippedWithoutClasses = (int) $skippedStmt->fetchColumn();
+        } else {
+            $updateStmt = $conn->prepare('UPDATE section SET is_open = FALSE WHERE is_open = TRUE');
+            $updateStmt->execute();
+            $changed = $updateStmt->rowCount();
+            $eligibleCount = 0;
+            $skippedWithoutClasses = 0;
+        }
+        $conn->commit();
+        respond([
+            'success' => true,
+            'isOpen' => $isOpen,
+            'changed' => $changed,
+            'eligible' => $eligibleCount,
+            'skippedWithoutClasses' => $skippedWithoutClasses,
+        ]);
+    }
+
     if ($resource === 'sections' && ($data['action'] ?? '') === 'clearSubjectSchedules') {
         $subjectId = $data['subjectId'] ?? null;
         if (!is_numeric($subjectId) || (int) $subjectId < 1) {

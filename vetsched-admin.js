@@ -512,6 +512,17 @@ function renderSettingsMain(){
         </div>
       </section>
 
+      <section class="settings-card settings-section-controls">
+        <div>
+          <h2>Open or close all sections</h2>
+          <p>Opening makes every section with at least one class available to students, including sections already at capacity. Sections without classes will stay closed. Closing makes all sections unavailable for new enrollment; it does not delete classes or student schedules.</p>
+        </div>
+        <div class="settings-form-actions">
+          <button type="button" class="btn-primary" id="openAllSectionsBtn">Open all sections</button>
+          <button type="button" class="danger-action-btn" id="closeAllSectionsBtn">Close all sections</button>
+        </div>
+      </section>
+
       <section class="settings-danger">
         <div>
           <h2>End semester</h2>
@@ -546,6 +557,8 @@ function renderSettingsMain(){
   document.getElementById('changePasswordBtn').addEventListener('click', changeAdminPassword);
   document.querySelectorAll('[data-password-target]').forEach(toggle=>toggle.addEventListener('click',()=>togglePasswordVisibility(toggle)));
   document.getElementById('setSemesterBtn').addEventListener('click', setSemester);
+  document.getElementById('openAllSectionsBtn').addEventListener('click',()=>setAllSectionsOpen(true));
+  document.getElementById('closeAllSectionsBtn').addEventListener('click',()=>setAllSectionsOpen(false));
   const clearSemesterSelect=document.getElementById('clearSemesterScheduleSelect');
   const clearSemesterButton=document.getElementById('clearSemesterScheduleBtn');
   clearSemesterSelect.addEventListener('change',()=>{clearSemesterButton.disabled=!clearSemesterSelect.value;});
@@ -847,6 +860,37 @@ function openAddSectionModal(){editingSectionId=null;selectedDays=[];document.ge
 function openEditSectionModal(id){const sec=sections.find(x=>x.id===id);if(!sec)return;editingSectionId=id;selectedDays=[...(sec.days||[])];document.getElementById('sectionModalTitle').textContent='Edit section';document.getElementById('sectionType').value=sec.type;document.getElementById('classType').value=sec.classType||'Lecture';document.getElementById('startTime').value=sec.start;document.getElementById('endTime').value=sec.end;document.getElementById('instructor').value=sec.instructor;document.getElementById('room').value=sec.room||'';document.getElementById('maxCapacity').value=sec.maxCapacity||'';clearErrors(['sectionTypeError','dayError','timeError','instructorError','maxCapacityError']);setDayPickerUI();document.getElementById('sectionOverlay').classList.add('open');}
 function closeSectionModal(){document.getElementById('sectionOverlay').classList.remove('open');}
 async function toggleSection(id){const section=sections.find(item=>String(item.id)===String(id));if(!section)return;const opening=!section.isOpen;if(opening&&Number(section.enrollmentCount||0)>=Number(section.maxCapacity||0)){if(!confirm('Max capacity has been reach are u sure u want to re open section'))return;}try{const response=await fetch(`${API_URL}?resource=sections`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'toggle',id:section.id,isOpen:opening})});const result=await response.json();if(!response.ok||result.success===false)throw new Error(result.message||'Could not change section status');section.isOpen=opening;renderAll();showToast(opening?'Section opened':'Section closed');}catch(error){console.error('Section status error',error);showToast(error.message||'Could not change section status');}}
+async function setAllSectionsOpen(isOpen){
+  const actionLabel=isOpen?'open':'close';
+  const warning=isOpen
+    ?'Open all sections that have at least one class? They will become available to students, including sections already at capacity. Sections without classes will stay closed.'
+    :'Close all sections? Students will no longer be able to enroll in them. Existing classes and student schedules will not be deleted.';
+  if(!confirm(warning))return;
+  const buttons=['openAllSectionsBtn','closeAllSectionsBtn'].map(id=>document.getElementById(id));
+  buttons.forEach(button=>{button.disabled=true;button.setAttribute('aria-busy','true');});
+  try{
+    const response=await fetch(`${API_URL}?resource=sections`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'toggleAll',isOpen})
+    });
+    const result=await response.json();
+    if(!response.ok||result.success!==true)throw new Error(result.message||`Could not ${actionLabel} all sections.`);
+    await refreshFromDatabase(true);
+    if(isOpen){
+      showToast(result.skippedWithoutClasses
+        ?`Opened ${result.changed} sections. ${result.skippedWithoutClasses} sections without classes stayed closed.`
+        :`Opened ${result.changed} sections.`);
+    }else{
+      showToast(`Closed ${result.changed} sections.`);
+    }
+  }catch(error){
+    console.error(`Bulk section ${actionLabel} error`,error);
+    showToast(error.message||`Could not ${actionLabel} all sections.`);
+  }finally{
+    buttons.forEach(button=>{button.disabled=false;button.removeAttribute('aria-busy');});
+  }
+}
 async function saveSection(){const type=document.getElementById('sectionType').value.trim(),start=document.getElementById('startTime').value,end=document.getElementById('endTime').value,instructor=document.getElementById('instructor').value.trim(),room=document.getElementById('room').value.trim(),maxCapacity=Number(document.getElementById('maxCapacity').value),subjectId=activeSubjectId;let valid=true;document.getElementById('sectionTypeError').style.display=type?'none':(valid=false,'block');document.getElementById('dayError').style.display=selectedDays.length?'none':(valid=false,'block');document.getElementById('instructorError').style.display=instructor?'none':(valid=false,'block');document.getElementById('maxCapacityError').style.display=maxCapacity>0?'none':(valid=false,'block');const timeOk=!start||!end||start<end;document.getElementById('timeError').style.display=timeOk?'none':(valid=false,'block');if(!valid)return;if(!subjectId){showToast('Select a subject before adding a section');return;}const section=editingSectionId?sections.find(x=>String(x.id)===String(editingSectionId)):null;const payload={id:section?.id||uid(),subjectId,type,classType:document.getElementById('classType').value,days:[...selectedDays],start,end,instructor,room,maxCapacity,isOpen:section?.isOpen??false};const saved=await saveList('sections',[payload]);if(!saved)return;if(section)Object.assign(section,payload);else sections.push(saved.find(item=>String(item.id)===String(payload.id))||payload);closeSectionModal();await refreshFromDatabase(true);showToast(editingSectionId?'Section updated':'Section added');}
 async function deleteSection(id){const sec=sections.find(x=>x.id===id);if(!sec||!confirm(`Delete "${sec.type}"? This can't be undone.`))return;if(!await deleteRecord('sections',id))return;sections=sections.filter(x=>x.id!==id);showToast('Section deleted');renderAll();}
 function openAddStudentModal(){editingStudentId=null;document.getElementById('studentModalTitle').textContent='Add student';document.getElementById('studentId').value='';document.getElementById('studentName').value='';clearErrors(['studentIdError','studentNameError']);document.getElementById('studentOverlay').classList.add('open');document.getElementById('studentId').focus();}
