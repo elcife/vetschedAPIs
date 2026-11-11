@@ -10,6 +10,13 @@ async function loadList(key){
 	if(!response.ok) throw new Error(`API request failed (${response.status})`);
 	return await response.json();
 }
+async function loadActiveSemester(){
+	const response=await fetch(`${API_URL}?resource=activeSemester&_=${Date.now()}`,{cache:'no-store'});
+	if(!response.ok)throw new Error(`API request failed (${response.status})`);
+	const result=await response.json();
+	if(![1,2].includes(Number(result.semester)))throw new Error('API returned an invalid active semester');
+	return Number(result.semester);
+}
 async function saveList(key,list){
 	try{
 		for(const item of list){
@@ -941,9 +948,13 @@ async function setSemester(){
     const response=await fetch(`${API_URL}?resource=students`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'setSemester',semester})});
     const result=await response.json();
     if(!response.ok||result.success===false)throw new Error(result.message||'Could not set semester');
+    activeSemester=semester;
+    sectionFilterId='';
+    activeSubjectId=null;
     students=students.map(student=>({...student,semester,encodingDone:false}));
     studentSchedules={};
     viewingStudentScheduleId=null;
+    selectActiveSubject();
     showToast(`Semester ${semester} set; schedules returned and cleared`);
     renderAll();
   }catch(error){console.error('Set semester error',error);showToast(error.message||'Could not set semester');}
@@ -1115,15 +1126,16 @@ async function refreshFromDatabase(showLoading=false){
 	if(isRefreshing||!currentAdmin)return;
 	isRefreshing=true;
 	try{
-		const [freshSubjects,freshSections,freshStudents,freshInstructors]=await Promise.all([loadList('subjects'),loadList('sections'),loadList('students'),loadList('instructors')]);
+		const [freshSubjects,freshSections,freshStudents,freshInstructors,freshActiveSemester]=await Promise.all([loadList('subjects'),loadList('sections'),loadList('students'),loadList('instructors'),loadActiveSemester()]);
 		instructors=freshInstructors.map(item=>({id:item.id??item.instructor_id,name:item.name??item.instructor_name??''})).filter(item=>item.name);
 		document.getElementById('databaseError').hidden=true;
 		const parseDatabaseArray=value=>Array.isArray(value)?value:(typeof value==='string'&&value.startsWith('{')&&value.endsWith('}')?value.slice(1,-1).split(',').filter(Boolean):[]);
 		subjects=freshSubjects.map(subject=>({...subject,id:String(subject.id)}));
 		sections=freshSections.map(section=>({...section,id:String(section.id),subjectId:section.subjectId==null?null:String(section.subjectId),classTypes:parseDatabaseArray(section.classTypes),days:parseDatabaseArray(section.days),scheduleIds:parseDatabaseArray(section.scheduleIds).map(id=>String(id))}));
 		students=freshStudents;
+		activeSemester=freshActiveSemester;
 		selectActiveSubject();
-		const databaseSnapshot=JSON.stringify({subjects,sections,students});
+		const databaseSnapshot=JSON.stringify({subjects,sections,students,activeSemester});
 		if(!showLoading&&databaseSnapshot===lastDatabaseSnapshot)return;
 		lastDatabaseSnapshot=databaseSnapshot;
 		renderAll();

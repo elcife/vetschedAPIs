@@ -143,6 +143,10 @@ $resource = $_GET['resource'] ?? '';
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        if ($resource === 'activeSemester') {
+            respond(['semester' => getActiveSemester($conn)]);
+        }
+
         if ($resource === 'subjects') {
             $stmt = $conn->query('SELECT subject_id AS id, TRIM(subject_code) AS code, subject_name AS name, year_level AS "yearLevel", semester FROM subject ORDER BY year_level, semester, subject_id');
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
