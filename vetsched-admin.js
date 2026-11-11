@@ -571,8 +571,8 @@ function renderSettingsMain(){
         <div class="field settings-clear-subject-field">
           <label for="setSemesterSelect">Semester</label>
           <select id="setSemesterSelect">
-            <option value="1" ${activeSemester===1?'selected':''}>Semester 1</option>
-            <option value="2" ${activeSemester===2?'selected':''}>Semester 2</option>
+            <option value="1" ${activeSemester===1?'selected':''}>1</option>
+            <option value="2" ${activeSemester===2?'selected':''}>2</option>
           </select>
         </div>
         <button class="danger-action-btn" id="setSemesterBtn">Switch semester</button>
