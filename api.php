@@ -19,6 +19,9 @@ function parsePgArray($pgArray) {
 
 function respond($data, $status = 200) {
     http_response_code($status);
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
     if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO) {
         @header('X-Active-Semester: ' . getActiveSemester($GLOBALS['conn']));
     }
