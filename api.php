@@ -19,6 +19,9 @@ function parsePgArray($pgArray) {
 
 function respond($data, $status = 200) {
     http_response_code($status);
+    if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof PDO) {
+        @header('X-Active-Semester: ' . getActiveSemester($GLOBALS['conn']));
+    }
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
