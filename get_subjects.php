@@ -108,7 +108,6 @@ try {
                        FILTER (WHERE sc.day_of_the_week IS NOT NULL) AS days,
                    MAX(i.instructor_name) AS instructor,
                    MAX(CONCAT_WS(', ', NULLIF(TRIM(r.building), ''), NULLIF(TRIM(r.room_num), ''))) AS room,
-                   s.max_capacity AS \"maxCapacity\",
                    MAX(o.class_type) AS \"classType\",
                    ARRAY_AGG(DISTINCT o.class_type) FILTER (WHERE o.class_type IS NOT NULL) AS \"classTypes\"
             FROM section s
@@ -117,7 +116,7 @@ try {
             LEFT JOIN instructor i ON i.instructor_id = o.instructor_id
             LEFT JOIN room r ON r.room_id = o.room_id
             WHERE s.is_open = TRUE
-            GROUP BY o.subject_id, s.section_id, s.section_name, s.max_capacity
+            GROUP BY o.subject_id, s.section_id, s.section_name
             ORDER BY s.section_id
         ";
         $sectionStmt = $conn->prepare($sectionSql);
@@ -131,7 +130,6 @@ try {
             $section['end'] = $section['end'] ?? '';
             $section['room'] = $section['room'] ?? '';
             $section['instructor'] = $section['instructor'] ?? '';
-            $section['maxCapacity'] = $section['maxCapacity'] ?? 0;
             $section['classType'] = $section['classType'] ?? 'Lecture';
             $section['classTypes'] = parsePgArray($section['classTypes']);
             $sectionsBySubject[$subjectId][] = $section;

@@ -131,45 +131,4 @@ try {
     exit;
 }
 
-function lockAndCheckOfferingCapacity(PDO $conn, string $studentId, array $offeringIds): array
-{
-    $normalizedIds = [];
-    foreach ($offeringIds as $offeringId) {
-        if ((!is_int($offeringId) && !(is_string($offeringId) && ctype_digit($offeringId))) ||
-            (int) $offeringId < 1) {
-            throw new InvalidArgumentException('Offering IDs must be positive integers.');
-        }
-        $normalizedIds[] = (int) $offeringId;
-    }
-    $normalizedIds = array_values(array_unique($normalizedIds));
-    sort($normalizedIds, SORT_NUMERIC);
-
-    if ($normalizedIds === []) {
-        throw new InvalidArgumentException('At least one offering ID is required.');
-    }
-
-    $placeholders = implode(',', array_fill(0, count($normalizedIds), '?'));
-    $lockStmt = $conn->prepare(
-        "SELECT offering_id
-         FROM offering
-         WHERE offering_id IN ($placeholders)
-         ORDER BY offering_id
-         FOR UPDATE"
-    );
-    $lockStmt->execute($normalizedIds);
-
-    $foundIds = array_map('intval', $lockStmt->fetchAll(PDO::FETCH_COLUMN));
-
-    $unavailableIds = [];
-    foreach ($normalizedIds as $offeringId) {
-        if (!in_array($offeringId, $foundIds, true)) {
-            $unavailableIds[] = $offeringId;
-        }
-    }
-
-    return [
-        'offeringIds' => $normalizedIds,
-        'unavailableIds' => $unavailableIds,
-    ];
-}
 ?>
