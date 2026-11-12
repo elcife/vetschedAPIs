@@ -114,7 +114,6 @@ try {
 
         $conn->beginTransaction();
         try {
-
             $placeholders = implode(',', array_fill(0, count($offeringIds), '?'));
             $deleteStmt = $conn->prepare("DELETE FROM plotting WHERE TRIM(student_id) = TRIM(?) AND offering_id IN ($placeholders)");
             $deleteStmt->execute(array_merge([$studentId], array_values($offeringIds)));
