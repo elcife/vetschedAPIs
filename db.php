@@ -101,27 +101,6 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-
-    try {
-        $conn->exec("
-            DO $$
-            DECLARE
-                trg RECORD;
-            BEGIN
-                FOR trg IN
-                    SELECT trigger_name, event_object_table
-                    FROM information_schema.triggers
-                    WHERE trigger_name LIKE '%capacity%'
-                LOOP
-                    EXECUTE 'DROP TRIGGER IF EXISTS ' || quote_ident(trg.trigger_name) || ' ON ' || quote_ident(trg.event_object_table) || ' CASCADE;';
-                END LOOP;
-            END $$;
-            DROP FUNCTION IF EXISTS check_offering_capacity() CASCADE;
-            DROP FUNCTION IF EXISTS check_capacity() CASCADE;
-        ");
-    } catch (Throwable $ignore) {
-        // Ignore trigger drop error
-    }
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
@@ -130,5 +109,4 @@ try {
     ]);
     exit;
 }
-
 ?>
