@@ -136,11 +136,6 @@
       <input type="text" id="sectionType" placeholder="e.g. Section A">
       <div class="field-error" id="sectionTypeError">Give the section a name.</div>
     </div>
-    <div class="field">
-      <label for="maxCapacity">Maximum capacity</label>
-      <input type="number" id="maxCapacity" min="1" step="1" placeholder="e.g. 40">
-      <div class="field-error" id="maxCapacityError">Enter a capacity greater than 0.</div>
-    </div>
     <div class="modal-actions">
       <button class="btn-secondary" id="cancelSection">Cancel</button>
       <button class="btn-primary" id="saveSection">Save section</button>
@@ -151,7 +146,7 @@
 <div class="overlay" id="bulkSectionsOverlay">
   <div class="modal">
     <h3 id="bulkSectionsTitle">Quick add sections</h3>
-    <p class="bulk-sections-help">Choose a letter, how many sections to create, and the maximum capacity for each section. Sections are created empty so you can add classes later.</p>
+    <p class="bulk-sections-help">Choose a letter and how many sections to create. Sections are created empty so you can add classes later.</p>
     <div class="field">
       <label for="bulkSectionPrefix">Section letter</label>
       <input type="text" id="bulkSectionPrefix" value="A" maxlength="1" autocomplete="off">
@@ -161,11 +156,6 @@
       <label for="bulkSectionCount">How many sections?</label>
       <input type="number" id="bulkSectionCount" min="1" max="100" step="1" value="5">
       <div class="field-error" id="bulkSectionCountError">Enter a number from 1 to 100.</div>
-    </div>
-    <div class="field">
-      <label for="bulkSectionCapacity">Maximum capacity per section</label>
-      <input type="number" id="bulkSectionCapacity" min="1" step="1" value="50">
-      <div class="field-error" id="bulkSectionCapacityError">Enter a capacity greater than 0.</div>
     </div>
     <p class="bulk-sections-preview" id="bulkSectionsPreview" aria-live="polite"></p>
     <div class="modal-actions">

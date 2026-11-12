@@ -162,22 +162,9 @@ try {
         if ($resource === 'sections') {
             $sql = "SELECT s.section_id AS id, s.section_name AS type,
                            s.is_open AS \"isOpen\",
-                           s.subject_id AS \"subjectId\",
-                           s.max_capacity AS \"maxCapacity\",
-                           COUNT(DISTINCT ss.student_id) AS \"enrollmentCount\"
+                           s.subject_id AS \"subjectId\"
                     FROM section s
                     JOIN subject sub ON sub.subject_id = s.subject_id
-                    LEFT JOIN (
-                        SELECT section_id, offering_id FROM offering WHERE section_id IS NOT NULL
-                        UNION
-                        SELECT sc.section_id, o.offering_id
-                        FROM offering o
-                        INNER JOIN schedule sc ON sc.schedule_id = o.schedule_id
-                    ) so ON so.section_id = s.section_id
-                    LEFT JOIN plotting p ON p.offering_id = so.offering_id
-                    LEFT JOIN schedule_submission ss
-                        ON TRIM(ss.student_id) = TRIM(p.student_id) AND ss.is_submitted = TRUE
-                    GROUP BY s.section_id, s.section_name, s.is_open, s.subject_id, s.max_capacity
                     ORDER BY s.section_id";
             $rows = $conn->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
@@ -206,9 +193,6 @@ try {
                 $row['offeringIds'] = $allOfferingIds;
                 $row['id'] = (int)$row['id'];
                 $row['subjectId'] = $row['subjectId'] !== null ? (int)$row['subjectId'] : null;
-                $row['maxCapacity'] = (int)$row['maxCapacity'];
-                $row['enrollmentCount'] = (int)$row['enrollmentCount'];
-                $row['remainingSeats'] = max($row['maxCapacity'] - $row['enrollmentCount'], 0);
                 $row['isOpen'] = (bool)$row['isOpen'];
             }
             unset($row);
@@ -448,12 +432,10 @@ try {
         $subjectId = filter_var($data['subjectId'] ?? null, FILTER_VALIDATE_INT);
         $prefix = strtoupper(trim((string) ($data['prefix'] ?? '')));
         $count = filter_var($data['count'] ?? null, FILTER_VALIDATE_INT);
-        $capacity = filter_var($data['maxCapacity'] ?? null, FILTER_VALIDATE_INT);
         if ($subjectId === false || $subjectId < 1 ||
             !preg_match('/^[A-Z]$/', $prefix) ||
-            $count === false || $count < 1 || $count > 100 ||
-            $capacity === false || $capacity < 1) {
-            respond(['success' => false, 'message' => 'A valid subject, one-letter section name, section count (1–100), and capacity are required'], 400);
+            $count === false || $count < 1 || $count > 100) {
+            respond(['success' => false, 'message' => 'A valid subject, one-letter section name, and section count (1–100) are required'], 400);
         }
 
         $conn->beginTransaction();
@@ -489,12 +471,11 @@ try {
             respond(['success' => false, 'message' => 'One or more generated section names already exist for this subject'], 409);
         }
 
-        $insertStmt = $conn->prepare('INSERT INTO section (section_name, subject_id, max_capacity, is_open) VALUES (:name, :subject, :capacity, FALSE)');
+        $insertStmt = $conn->prepare('INSERT INTO section (section_name, subject_id, is_open) VALUES (:name, :subject, FALSE)');
         foreach ($names as $name) {
             $insertStmt->execute([
                 ':name' => $name,
                 ':subject' => (int) $subjectId,
-                ':capacity' => $capacity,
             ]);
         }
         $conn->commit();
@@ -938,12 +919,10 @@ try {
         $sectionId = $data['id'] ?? null;
         $subjectId = $data['subjectId'] ?? $data['subject_id'] ?? null;
         $sectionName = trim((string) ($data['type'] ?? ''));
-        $capacity = filter_var($data['maxCapacity'] ?? null, FILTER_VALIDATE_INT);
         if (!is_numeric($sectionId) || (int) $sectionId < 1 ||
             !is_numeric($subjectId) || (int) $subjectId < 1 ||
-            $sectionName === '' || strlen($sectionName) > 50 ||
-            $capacity === false || $capacity < 1) {
-            respond(['success' => false, 'message' => 'A valid section, subject, name, and capacity are required'], 400);
+            $sectionName === '' || strlen($sectionName) > 50) {
+            respond(['success' => false, 'message' => 'A valid section, subject, and name are required'], 400);
         }
 
         $conn->beginTransaction();
@@ -963,10 +942,10 @@ try {
             rejectDuplicateName($conn, 'A section with this name already exists for this subject');
         }
 
-        $updateStmt = $conn->prepare('UPDATE section SET section_name = :name, subject_id = :subject, max_capacity = :capacity WHERE section_id = :id');
-        $updateStmt->execute([':name' => $sectionName, ':subject' => $subjectId, ':capacity' => $capacity, ':id' => $sectionId]);
-        $offeringStmt = $conn->prepare('UPDATE offering SET subject_id = :subject, max_capacity = :capacity WHERE section_id = :section_direct OR schedule_id IN (SELECT schedule_id FROM schedule WHERE section_id = :section_schedule)');
-        $offeringStmt->execute([':subject' => $subjectId, ':capacity' => $capacity, ':section_direct' => $sectionId, ':section_schedule' => $sectionId]);
+        $updateStmt = $conn->prepare('UPDATE section SET section_name = :name, subject_id = :subject WHERE section_id = :id');
+        $updateStmt->execute([':name' => $sectionName, ':subject' => $subjectId, ':id' => $sectionId]);
+        $offeringStmt = $conn->prepare('UPDATE offering SET subject_id = :subject WHERE section_id = :section_direct OR schedule_id IN (SELECT schedule_id FROM schedule WHERE section_id = :section_schedule)');
+        $offeringStmt->execute([':subject' => $subjectId, ':section_direct' => $sectionId, ':section_schedule' => $sectionId]);
         $conn->commit();
         respond(['success' => true, 'id' => $sectionId]);
     }
@@ -974,10 +953,9 @@ try {
     if ($resource === 'sections' && array_key_exists('classes', $data)) {
         $subjectId = $data['subjectId'] ?? $data['subject_id'] ?? null;
         $sectionName = trim((string) ($data['type'] ?? ''));
-        $capacity = (int) ($data['maxCapacity'] ?? 0);
         $classes = is_array($data['classes']) ? $data['classes'] : [];
-        if (!is_numeric($subjectId) || $sectionName === '' || $capacity < 1) {
-            respond(['success' => false, 'message' => 'Section name, subject, and capacity are required'], 400);
+        if (!is_numeric($subjectId) || $sectionName === '') {
+            respond(['success' => false, 'message' => 'Section name and subject are required'], 400);
         }
         foreach ($classes as $class) {
             $classDays = is_array($class['days'] ?? null) ? array_values(array_unique(array_filter($class['days']))) : [];
@@ -1005,13 +983,12 @@ try {
         $sectionId = null;
         if (!empty($data['id']) && is_numeric($data['id'])) {
             $sectionId = (int) $data['id'];
-            $stmt = $conn->prepare('UPDATE section SET section_name = :name, subject_id = :subject, max_capacity = :capacity WHERE section_id = :id');
-            $stmt->execute([':id' => $sectionId, ':name' => $sectionName, ':subject' => $subjectId, ':capacity' => $capacity]);
+            $stmt = $conn->prepare('UPDATE section SET section_name = :name, subject_id = :subject WHERE section_id = :id');
+            $stmt->execute([':id' => $sectionId, ':name' => $sectionName, ':subject' => $subjectId]);
         } else {
-            $stmt = $conn->prepare('INSERT INTO section (section_name, subject_id, max_capacity, is_open) VALUES (:name, :subject, :capacity, :is_open) RETURNING section_id');
+            $stmt = $conn->prepare('INSERT INTO section (section_name, subject_id, is_open) VALUES (:name, :subject, :is_open) RETURNING section_id');
             $stmt->bindValue(':name', $sectionName);
             $stmt->bindValue(':subject', (int) $subjectId, PDO::PARAM_INT);
-            $stmt->bindValue(':capacity', $capacity, PDO::PARAM_INT);
             $stmt->bindValue(':is_open', (bool) ($data['isOpen'] ?? false), PDO::PARAM_BOOL);
             $stmt->execute();
             $sectionId = (int) $stmt->fetchColumn();
@@ -1024,7 +1001,7 @@ try {
 
         $roomStmt = $conn->prepare('INSERT INTO room (building, room_num) VALUES (:building, :room) RETURNING room_id');
         $scheduleStmt = $conn->prepare('INSERT INTO schedule (day_of_the_week, start_time, end_time, section_id) VALUES (:day, :start, :end, :section) RETURNING schedule_id');
-        $offeringStmt = $conn->prepare('INSERT INTO offering (subject_id, room_id, instructor_id, max_capacity, schedule_id, section_id, class_type) VALUES (:subject, :room, :instructor, :capacity, :schedule, :section, :class_type)');
+        $offeringStmt = $conn->prepare('INSERT INTO offering (subject_id, room_id, instructor_id, schedule_id, section_id, class_type) VALUES (:subject, :room, :instructor, :schedule, :section, :class_type)');
         foreach ($classes as $class) {
             $classType = ucfirst(strtolower(trim((string) ($class['classType'] ?? ''))));
             $days = is_array($class['days'] ?? null) ? array_values(array_unique(array_filter($class['days']))) : [];
@@ -1046,7 +1023,7 @@ try {
             }
             foreach ($days as $day) {
                 $scheduleStmt->execute([':day' => $day, ':start' => $start, ':end' => $end, ':section' => $sectionId]);
-                $offeringStmt->execute([':subject' => $subjectId, ':room' => $roomId, ':instructor' => $instructorId, ':capacity' => $capacity, ':schedule' => $scheduleStmt->fetchColumn(), ':section' => $sectionId, ':class_type' => $classType]);
+                $offeringStmt->execute([':subject' => $subjectId, ':room' => $roomId, ':instructor' => $instructorId, ':schedule' => $scheduleStmt->fetchColumn(), ':section' => $sectionId, ':class_type' => $classType]);
             }
         }
         $conn->commit();
@@ -1142,8 +1119,8 @@ try {
         $scheduleStmt = $conn->prepare('SELECT schedule_id FROM schedule WHERE section_id = :section AND day_of_the_week = :day AND start_time = :start AND end_time = :end LIMIT 1');
         $insertScheduleStmt = $conn->prepare('INSERT INTO schedule (day_of_the_week, start_time, end_time, section_id) VALUES (:day, :start, :end, :section) RETURNING schedule_id');
         $findOfferingStmt = $conn->prepare('SELECT o.offering_id FROM offering o WHERE o.schedule_id = :schedule AND o.class_type = :class_type LIMIT 1');
-        $updateOfferingStmt = $conn->prepare('UPDATE offering SET subject_id = :subject, room_id = :room, instructor_id = :instructor, max_capacity = :capacity, schedule_id = :schedule, section_id = :section, class_type = :class_type WHERE offering_id = :id');
-        $insertOfferingStmt = $conn->prepare('INSERT INTO offering (subject_id, room_id, instructor_id, max_capacity, schedule_id, section_id, class_type) VALUES (:subject, :room, :instructor, :capacity, :schedule, :section, :class_type)');
+        $updateOfferingStmt = $conn->prepare('UPDATE offering SET subject_id = :subject, room_id = :room, instructor_id = :instructor, schedule_id = :schedule, section_id = :section, class_type = :class_type WHERE offering_id = :id');
+        $insertOfferingStmt = $conn->prepare('INSERT INTO offering (subject_id, room_id, instructor_id, schedule_id, section_id, class_type) VALUES (:subject, :room, :instructor, :schedule, :section, :class_type)');
         foreach (array_filter($days) as $day) {
             $scheduleStmt->execute([':day' => $day, ':start' => $data['start'], ':end' => $data['end'], ':section' => $sectionId]);
             $scheduleId = (int) $scheduleStmt->fetchColumn();
@@ -1155,9 +1132,9 @@ try {
             $findOfferingStmt->execute([':schedule' => $scheduleId, ':class_type' => $classType]);
             $offeringId = $findOfferingStmt->fetchColumn();
         if ($offeringId) {
-            $updateOfferingStmt->execute([':id' => $offeringId, ':subject' => $data['subjectId'], ':room' => $roomId, ':instructor' => $instructorId, ':capacity' => $data['maxCapacity'] ?? 0, ':schedule' => $scheduleId, ':section' => $sectionId, ':class_type' => $classType]);
+            $updateOfferingStmt->execute([':id' => $offeringId, ':subject' => $data['subjectId'], ':room' => $roomId, ':instructor' => $instructorId, ':schedule' => $scheduleId, ':section' => $sectionId, ':class_type' => $classType]);
         } else {
-            $insertOfferingStmt->execute([':subject' => $data['subjectId'], ':room' => $roomId, ':instructor' => $instructorId, ':capacity' => $data['maxCapacity'] ?? 0, ':schedule' => $scheduleId, ':section' => $sectionId, ':class_type' => $classType]);
+            $insertOfferingStmt->execute([':subject' => $data['subjectId'], ':room' => $roomId, ':instructor' => $instructorId, ':schedule' => $scheduleId, ':section' => $sectionId, ':class_type' => $classType]);
         }
         }
         $conn->commit();
@@ -1167,7 +1144,6 @@ try {
     if ($resource === 'offerings') {
         $subjectId = $data['subjectId'] ?? null;
         $sectionId = $data['sectionId'] ?? null;
-        $capacity = (int) ($data['maxCapacity'] ?? 0);
         if (!is_numeric($subjectId) || !is_numeric($sectionId)) {
             respond(['success' => false, 'message' => 'Subject and section IDs are required'], 400);
         }
@@ -1185,11 +1161,11 @@ try {
         $offeringStmt->execute([':subject' => $subjectId, ':schedule' => $scheduleId]);
         $offeringId = $offeringStmt->fetchColumn();
         if ($offeringId) {
-            $updateStmt = $conn->prepare('UPDATE offering SET max_capacity = :capacity, section_id = :section WHERE offering_id = :id');
-            $updateStmt->execute([':capacity' => $capacity, ':section' => $sectionId, ':id' => $offeringId]);
+            $updateStmt = $conn->prepare('UPDATE offering SET section_id = :section WHERE offering_id = :id');
+            $updateStmt->execute([':section' => $sectionId, ':id' => $offeringId]);
         } else {
-            $insertStmt = $conn->prepare('INSERT INTO offering (subject_id, max_capacity, schedule_id, section_id) VALUES (:subject, :capacity, :schedule, :section) RETURNING offering_id');
-            $insertStmt->execute([':subject' => $subjectId, ':capacity' => $capacity, ':schedule' => $scheduleId, ':section' => $sectionId]);
+            $insertStmt = $conn->prepare('INSERT INTO offering (subject_id, schedule_id, section_id) VALUES (:subject, :schedule, :section) RETURNING offering_id');
+            $insertStmt->execute([':subject' => $subjectId, ':schedule' => $scheduleId, ':section' => $sectionId]);
             $offeringId = $insertStmt->fetchColumn();
         }
         $conn->commit();
