@@ -129,7 +129,7 @@ function lockAndCheckOfferingCapacity(PDO $conn, string $studentId, array $offer
 
     $placeholders = implode(',', array_fill(0, count($normalizedIds), '?'));
     $lockStmt = $conn->prepare(
-        "SELECT offering_id, max_capacity
+        "SELECT offering_id
          FROM offering
          WHERE offering_id IN ($placeholders)
          ORDER BY offering_id
@@ -137,28 +137,11 @@ function lockAndCheckOfferingCapacity(PDO $conn, string $studentId, array $offer
     );
     $lockStmt->execute($normalizedIds);
 
-    $capacities = [];
-    foreach ($lockStmt->fetchAll(PDO::FETCH_ASSOC) as $offering) {
-        $capacities[(int) $offering['offering_id']] = (int) $offering['max_capacity'];
-    }
+    $foundIds = array_map('intval', $lockStmt->fetchAll(PDO::FETCH_COLUMN));
 
-    $countStmt = $conn->prepare(
-        'SELECT COUNT(*) FROM plotting
-         WHERE offering_id = :offeringId
-           AND TRIM(student_id) <> TRIM(:studentId)'
-    );
     $unavailableIds = [];
     foreach ($normalizedIds as $offeringId) {
-        if (!isset($capacities[$offeringId])) {
-            $unavailableIds[] = $offeringId;
-            continue;
-        }
-
-        $countStmt->execute([
-            ':offeringId' => $offeringId,
-            ':studentId' => $studentId,
-        ]);
-        if ((int) $countStmt->fetchColumn() >= $capacities[$offeringId]) {
+        if (!in_array($offeringId, $foundIds, true)) {
             $unavailableIds[] = $offeringId;
         }
     }
